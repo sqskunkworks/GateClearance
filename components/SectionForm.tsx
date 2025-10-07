@@ -9,8 +9,7 @@ import { Shield, User, Building2, CheckCircle2, AlertTriangle } from 'lucide-rea
  * ------------------------------------------------------
  * A single, reusable form section component rendered from a config.
  * Three ready-made configs are exported: rulesConfig, personalConfig, contactOrgConfig.
- *
- * Styling: Tailwind v4; no external UI lib required.
+ * Styling: Tailwind v4; 
  */
 
 /* ============================
@@ -22,8 +21,10 @@ export type FieldBase = {
   required?: boolean;
   helpText?: string;
   placeholder?: string;
-  /** Force this field to take the full row on desktop when columns=2 */
   span?: 1 | 2;
+  // allows conditional display based on current values
+  showIf?: (values: Record<string, any>) => boolean;
+
 };
 
 export type RadioOption = { label: string; value: string };
@@ -34,39 +35,37 @@ export type Field =
   | (FieldBase & {
       kind: 'radio';
       options: RadioOption[];
-      /** Optional correctness gating (for rules quiz) */
       correctValue?: string;
       wrongCallout?: { title?: string; points: string[] };
     })
-  | (FieldBase & { kind: 'checkbox' });
+  | (FieldBase & { kind: 'checkbox' })
+  | (FieldBase & { kind: 'file'; accept?: string });
 
-export type SectionConfig = {
-  title: string;
-  subtitle?: string;
-  icon?: React.ReactNode;
-  fields: Field[];
-  /** Optional extra validation beyond required/format checks */
-  validate?: (values: Record<string, any>) => Record<string, string>;
-  /** Optional transform before POST/callback */
-  buildPayload?: (values: Record<string, any>) => any;
-  /** Default API path (if onSubmit not provided) */
-  apiPath?: (applicationId?: string) => string;
-  /** CTA label override */
-  ctaLabel?: string;
-  /** Desktop column count. Default 2. */
-  columns?: 1 | 2;
-};
 
+
+  export type SectionConfig = {
+    title: string;
+    subtitle?: string;
+    icon?: React.ReactNode;
+    fields: Field[];
+    validate?: (values: Record<string, any>) => Record<string, string>;
+    buildPayload?: (values: Record<string, any>) => Record<string, any>;
+    apiPath?: (applicationId?: string) => string;
+    ctaLabel?: string;
+    columns?: 1 | 2; // NEW
+  };
+  
 export type SectionFormProps = {
   applicationId?: string;
   config: SectionConfig;
   initialValues?: Record<string, any>;
+  clearOnSuccess?: boolean;
   onSubmit?: (values: Record<string, any>) => Promise<void> | void;
 };
 
-/* ============================
-   UI atoms
-   ============================ */
+/* =======
+   UI
+   ======== */
 const SectionHeader = ({ title, subtitle, icon }: { title: string; subtitle?: string; icon?: React.ReactNode }) => (
   <div className="border-b border-gray-200 bg-white/90 backdrop-blur">
     <div className="mx-auto max-w-3xl px-4 py-5">
@@ -78,6 +77,9 @@ const SectionHeader = ({ title, subtitle, icon }: { title: string; subtitle?: st
     </div>
   </div>
 );
+
+
+
 
 const Card = ({ children }: { children: React.ReactNode }) => (
   <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">{children}</div>
@@ -117,30 +119,120 @@ const ErrorCallout = ({ title, points }: { title?: string; points: string[] }) =
   </AnimatePresence>
 );
 
-/* ============================
+/* ==========
    Helpers
-   ============================ */
+   ============== */
 const isEmail = (v: string) => /.+@.+\..+/.test(v.trim());
+
 const digits = (s: string) => s.replace(/\D/g, '');
 const isPhone = (v: string) => {
   const d = digits(v);
   return d.length >= 10 && d.length <= 15;
 };
 const isYMD = (v?: string) => !!(v && /^\d{4}-\d{2}-\d{2}$/.test(v));
+const isRealDateYMD = (v?: string) => {
+  if (!isYMD(v)) return false;
+  const [y, m, d] = (v as string).split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return (
+    dt.getUTCFullYear() === y &&
+    dt.getUTCMonth() === m - 1 &&
+    dt.getUTCDate() === d
+  );
+};
 
-/* ============================
+// Accepts strictly "MM-DD-YYYY" and checks real calendar date + year range
+const isRealDateMMDDYYYY = (
+  s?: string,
+  { minYear = 1900, maxYear = 2030 }: { minYear?: number; maxYear?: number } = {}
+) => {
+  if (!s || !/^\d{2}-\d{2}-\d{4}$/.test(s)) return false;
+  const [mm, dd, yyyy] = s.split('-').map(Number);
+  if (yyyy < minYear || yyyy > maxYear) return false;
+
+  const dt = new Date(Date.UTC(yyyy, mm - 1, dd));
+  return (
+    dt.getUTCFullYear() === yyyy &&
+    dt.getUTCMonth() === mm - 1 &&
+    dt.getUTCDate() === dd
+  );
+};
+
+// ---------- PII validators & normalizers ----------
+const onlyDigits = (s: string) => (s || '').replace(/\D/g, '');
+const isAllSameDigits = (s: string) => /^([0-9])\1{8}$/.test(s); // 000000000, 111111111, ...
+
+// SSN: accept 123-45-6789 or 123456789; must be 9 digits, reject trivial/invalid combos
+function normalizeAndValidateSSN(raw?: string) {
+  const digits = onlyDigits(raw || '');
+  if (digits.length !== 9) return { ok: false, digits, msg: 'SSN must be 9 digits' };
+  // reject obviously invalid patterns
+  const area = digits.slice(0, 3), group = digits.slice(3, 5), serial = digits.slice(5);
+  if (area === '000' || group === '00' || serial === '0000') {
+    return { ok: false, digits, msg: 'SSN format is invalid' };
+  }
+  if (isAllSameDigits(digits) || digits === '123456789') {
+    return { ok: false, digits, msg: 'SSN looks invalid' };
+  }
+  return { ok: true, digits };
+}
+
+// US Passport (typical): 9 alphanumeric; Driver License: allow A–Z0–9, 5–20 chars
+function normalizeGovId(raw?: string) {
+  const s = (raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return s;
+}
+
+function validateGovId(type?: string, value?: string) {
+  const s = normalizeGovId(value);
+  if (!s) return { ok: false, msg: 'Government ID is required' };
+
+  if (type === 'passport') {
+    if (!/^[A-Z0-9]{9}$/.test(s)) {
+      return { ok: false, msg: 'Passport # must be 9 letters/numbers' };
+    }
+  } else {
+    // driver’s license (generic, permissive)
+    if (s.length < 5 || s.length > 20) {
+      return { ok: false, msg: 'DL number must be 5–20 letters/numbers' };
+    }
+  }
+  return { ok: true, normalized: s };
+}
+
+// Date must be real (MM-DD-YYYY) and not in the past
+function isFutureOrTodayMMDDYYYY(s?: string) {
+  if (!isRealDateMMDDYYYY(s)) return false;
+  const [mm, dd, yyyy] = (s as string).split('-').map(Number);
+  const d = new Date(yyyy, mm - 1, dd);
+  const today = new Date(); today.setHours(0,0,0,0);
+  return d >= today;
+}
+
+
+
+
+
+/* =============
    Component
-   ============================ */
-export function SectionForm({ applicationId, config, initialValues, onSubmit }: SectionFormProps) {
+   ================== */
+export function SectionForm({ applicationId, config, initialValues,clearOnSuccess, onSubmit }: SectionFormProps) {
   const [values, setValues] = useState<Record<string, any>>(initialValues || {});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-
+  const [appId]=useState(applicationId);
+ 
   // Base validation
   const baseErrors = useMemo(() => {
     const e: Record<string, string> = {};
+  
     for (const f of config.fields) {
+      // skip hidden fields
+      if (f.showIf && !f.showIf(values)) continue;
+  
       const v = values[f.name];
+  
+      // required
       if (f.required) {
         if (f.kind === 'checkbox') {
           if (!v) e[f.name] = 'Required';
@@ -150,14 +242,20 @@ export function SectionForm({ applicationId, config, initialValues, onSubmit }: 
           e[f.name] = 'Required';
         }
       }
-      if (v) {
+  
+      // type checks (only if not already errored)
+      if (v != null && e[f.name] == null) {
         if (f.kind === 'email' && !isEmail(String(v))) e[f.name] = 'Invalid email';
-        if (f.kind === 'tel' && !isPhone(String(v))) e[f.name] = 'Invalid phone';
-        if (f.kind === 'date' && !isYMD(String(v))) e[f.name] = 'Use YYYY-MM-DD';
+        else if (f.kind === 'tel' && !isPhone(String(v))) e[f.name] = 'Invalid phone';
+        else if (f.kind === 'date' && !isRealDateMMDDYYYY(String(v), { minYear: 1900, maxYear: 2030 })) {
+          e[f.name] = 'Use a real date in MM-DD-YYYY (1900–2030)';
+        }
       }
     }
+  
     return e;
   }, [config.fields, values]);
+  
 
   // Custom validation hook
   const customErrors = useMemo(() => (config.validate ? config.validate(values) : {}), [config, values]);
@@ -174,13 +272,18 @@ export function SectionForm({ applicationId, config, initialValues, onSubmit }: 
     return wrong;
   }, [config.fields, values]);
 
-  const requiredCount = config.fields.filter((f) => f.required).length;
-  const requiredSatisfied = config.fields.filter((f) => {
-    if (!f.required) return false;
+  const visibleRequired = config.fields.filter(
+    (f) => f.required && !(f.showIf && !f.showIf(values))
+  );
+  
+  const requiredCount = visibleRequired.length;
+  
+  const requiredSatisfied = visibleRequired.filter((f) => {
     const v = values[f.name];
     if (f.kind === 'checkbox') return !!v;
     return typeof v === 'string' ? v.trim().length > 0 : v != null;
   }).length;
+  
 
   const quizOk = Object.keys(quizWrongByField).length === 0;
   const canSubmit = requiredSatisfied === requiredCount && quizOk && Object.keys(errors).length === 0 && !submitting;
@@ -191,23 +294,30 @@ export function SectionForm({ applicationId, config, initialValues, onSubmit }: 
     setSubmitError(null);
 
     const payload = config.buildPayload ? config.buildPayload(values) : values;
-
     try {
       setSubmitting(true);
+      let ok = false; // NEW
+    
       if (onSubmit) {
         await onSubmit(payload);
+        ok = true;
       } else if (config.apiPath) {
-        await fetch(config.apiPath(applicationId), {
+        await fetch(config.apiPath(appId), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ applicationId, ...payload }),
+          body: JSON.stringify({ applicationId: appId, ...payload }), // use appId
         });
+        ok = true;
       }
+    
+      // NEW: wipe client-side values if caller asked for it
+      if (ok && clearOnSuccess) setValues({});
     } catch (err: any) {
       setSubmitError(err?.message || 'Failed to save');
     } finally {
       setSubmitting(false);
     }
+    
   }
 
   const cols = config.columns ?? 2; // default two columns on desktop
@@ -219,7 +329,9 @@ export function SectionForm({ applicationId, config, initialValues, onSubmit }: 
       <div className="mx-auto max-w-3xl space-y-6 px-4 py-6">
         <Card>
           <div className={`grid grid-cols-1 gap-4 ${cols === 2 ? 'md:grid-cols-2' : 'md:grid-cols-1'}`}>
-            {config.fields.map((f) => (
+          {config.fields.map((f) => {
+    if (f.showIf && !f.showIf(values)) return null; // respect showIf
+    return (
               <div key={f.name} className={f.kind === 'textarea' || f.span === 2 ? 'md:col-span-2' : ''}>
                 <label className="block text-sm font-medium text-gray-800" htmlFor={f.name}>
                   {f.label}
@@ -238,15 +350,28 @@ export function SectionForm({ applicationId, config, initialValues, onSubmit }: 
                 )}
 
                 {/* kind = text|email|tel|date */}
-                {(f.kind === 'text' || f.kind === 'email' || f.kind === 'tel' || f.kind === 'date') && (
-                  <Input
-                    id={f.name}
-                    type={f.kind === 'text' ? 'text' : f.kind}
-                    placeholder={f.placeholder}
-                    value={values[f.name] ?? ''}
-                    onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
-                  />
-                )}
+               {/* DATE: strict MM-DD-YYYY */}
+{f.kind === 'date' ? (
+  <Input
+    id={f.name}
+    type="text"
+    inputMode="numeric"
+    placeholder={f.placeholder || 'MM-DD-YYYY'}
+    value={values[f.name] ?? ''}
+    onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
+  />
+) : (
+  (f.kind === 'text' || f.kind === 'email' || f.kind === 'tel') && (
+    <Input
+      id={f.name}
+      type={f.kind === 'text' ? 'text' : f.kind}
+      placeholder={f.placeholder}
+      value={values[f.name] ?? ''}
+      onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
+    />
+  )
+)}
+
 
                 {/* kind = radio */}
                 {f.kind === 'radio' && (
@@ -291,6 +416,47 @@ export function SectionForm({ applicationId, config, initialValues, onSubmit }: 
                   </label>
                 )}
 
+{/* kind = file */}
+{/* kind = file (custom-styled) */}
+{f.kind === 'file' && (
+  <div className="mt-1">
+    {/* Hidden native input */}
+    <input
+      id={f.name}
+      type="file"
+      accept={(f as any).accept}
+      className="sr-only"
+      onChange={(e) => {
+        const file = e.target.files?.[0] || null;
+        setValues((v) => ({ ...v, [f.name]: file }));
+      }}
+    />
+
+    {/* Pretty label acts as button */}
+    <label
+      htmlFor={f.name}
+      className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm cursor-pointer hover:bg-gray-50"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+        <path d="M7 9l5-5 5 5" />
+        <path d="M12 4v12" />
+      </svg>
+      {values[f.name] instanceof File ? 'Change file' : 'Upload file'}
+    </label>
+
+    {/* Filename / helper */}
+    <div className="mt-2 text-xs text-gray-600">
+      {values[f.name] instanceof File
+        ? <>Selected: <span className="font-medium">{(values[f.name] as File).name}</span></>
+        : <>Accepted: {(f as any).accept || 'any file'}</>}
+    </div>
+  </div>
+)}
+
+
+
+
                 {/* help/error */}
                 {f.helpText && <p className="mt-1 text-xs text-gray-600">{f.helpText}</p>}
                 {errors[f.name] && <p className="mt-1 text-xs text-red-600">{errors[f.name]}</p>}
@@ -299,9 +465,10 @@ export function SectionForm({ applicationId, config, initialValues, onSubmit }: 
                 {f.kind === 'radio' && (f as any).correctValue && values[f.name] && values[f.name] !== (f as any).correctValue && (
                   <ErrorCallout title={(f as any).wrongCallout?.title} points={(f as any).wrongCallout?.points || []} />
                 )}
-              </div>
-            ))}
-          </div>
+             </div>
+    );
+  })}
+</div>
 
           {submitError && <p className="mt-3 text-sm text-red-700">{submitError}</p>}
         </Card>
@@ -328,11 +495,11 @@ export function SectionForm({ applicationId, config, initialValues, onSubmit }: 
   );
 }
 
-/* ============================
-   Ready-made configs (3 sections)
-   ============================ */
+/* ==========
+   Ready-made configs for the sections
+   ========== */
 
-// 1) Rules & Acknowledgment — single column
+// 1) Rules & Acknowledgment — single column temp
 export const rulesConfig: SectionConfig = {
   title: 'Review & Acknowledgment',
   subtitle: 'Confirm your understanding of key rules before your visit.',
@@ -431,17 +598,16 @@ export const rulesConfig: SectionConfig = {
     { kind: 'checkbox', name: 'ack', label: 'I have reviewed and agree to follow all rules and guidelines', required: true },
   ],
   buildPayload: (v) => ({
-    answers: {
-      color: v.color,
-      phonePolicy: v.phonePolicy,
-      shareContact: v.shareContact,
-      writtenMaterials: v.writtenMaterials,
-    },
+    rulesColor: v.color,
+    rulesPhonePolicy: v.phonePolicy,
+    rulesShareContact: v.shareContact,
+    rulesWrittenMaterials: v.writtenMaterials,
     acknowledgmentAgreement: !!v.ack,
   }),
+  
 };
 
-// 2) Personal Information — two columns
+// 2) Personal Information — two columns temp
 export const personalConfig: SectionConfig = {
   title: 'Personal Information',
   subtitle: 'Match your legal ID. Use full legal name.',
@@ -452,7 +618,7 @@ export const personalConfig: SectionConfig = {
     { kind: 'text', name: 'firstName', label: 'First name', required: true },
     { kind: 'text', name: 'lastName', label: 'Last name', required: true },
     { kind: 'text', name: 'otherNames', label: 'Other names (optional)', span: 2 },
-    { kind: 'date', name: 'dateOfBirth', label: 'Date of birth (YYYY-MM-DD)', required: true },
+    { kind: 'date', name: 'dateOfBirth', label: 'Date of birth (MM-DD-YYYY)', required: true },
     {
       kind: 'radio',
       name: 'gender',
@@ -469,13 +635,16 @@ export const personalConfig: SectionConfig = {
   ],
   validate: (v) => {
     const e: Record<string, string> = {};
-    if (!isYMD(v.dateOfBirth || '')) e.dateOfBirth = 'Use YYYY-MM-DD';
+    if (!isRealDateMMDDYYYY(v.dateOfBirth)) {
+      e.dateOfBirth = 'Use a real date in MM-DD-YYYY (1900–2030)';
+    }
     return e;
   },
-  buildPayload: (v) => ({ personal: v }),
+  
+  buildPayload: (v) => v,
 };
 
-// 3) Contact & Organization — two columns
+// 3) Contact & Organization — two columns temp
 export const contactOrgConfig: SectionConfig = {
   title: 'Contact & Organization',
   subtitle: 'We’ll use this for visit planning and updates.',
@@ -485,9 +654,260 @@ export const contactOrgConfig: SectionConfig = {
   fields: [
     { kind: 'email', name: 'email', label: 'Email', required: true, placeholder: 'you@example.com' },
     { kind: 'tel', name: 'phoneNumber', label: 'Phone number', required: true, placeholder: '415-555-1234 or +27 82 123 4567' },
-    { kind: 'date', name: 'visitDate', label: 'Preferred visit date (optional)' },
+    { kind: 'date', name: 'visitDate', label: 'Preferred visit date (MM-DD-YYYY, optional)' },
     { kind: 'text', name: 'companyOrOrganization', label: 'Company / Organization', required: true },
     { kind: 'textarea', name: 'purposeOfVisit', label: 'Purpose of visit', required: true, rows: 4 },
   ],
-  buildPayload: (v) => ({ contact: v }),
+  buildPayload: (v) => v,
+};
+
+
+// 4) Prior Experience & Expectations
+export const experienceConfig: SectionConfig = {
+  columns:1,
+  title: 'Prior Experience & Expectations',
+  subtitle: 'There are no right or wrong answers—just your honest thoughts.',
+  icon: <User className="h-6 w-6" />,
+  // backend route to add later:
+  // apiPath: (id) => `/api/applications/${id ?? 'temp'}/experience`,
+  fields: [
+    {
+      kind: 'radio',
+      name: 'engagedDirectly',
+      label: 'Have you ever engaged directly with incarcerated people before?',
+      required: true,
+      span: 2, 
+      options: [
+        { label: 'No, this is my first time directly engaging with incarcerated people.', value: 'no_first_time' },
+        { label: 'Yes, I have a personal connection (e.g., family/friends).', value: 'personal_connection' },
+        { label: 'Yes, through volunteer work.', value: 'volunteer' },
+        { label: 'Yes, in a professional capacity (e.g., work, advocacy, research, media).', value: 'professional' },
+        { label: 'Other', value: 'other' },
+      ],
+    },
+    { kind: 'textarea', name: 'perceptions', label: 'What comes to mind when you think about incarcerated people?', required: true, rows: 4 },
+    { kind: 'textarea', name: 'expectations', label: 'What do you expect to experience during your visit to SkunkWorks?', required: true, rows: 4 },
+    {
+      kind: 'radio',
+      name: 'justiceReformBefore',
+      label: 'Have you been involved in justice reform efforts before?',
+      required: true,
+      options: [
+        { label: 'Yes, I am actively engaged in justice reform.', value: 'active' },
+        { label: 'Yes, but only in a limited capacity.', value: 'limited' },
+        { label: 'No, I have never been involved.', value: 'never' },
+        { label: 'No, but I have thought about it.', value: 'thought_about' },
+        { label: 'Other', value: 'other' },
+      ],
+    },
+    { kind: 'textarea', name: 'interestsMost', label: 'What interests you most about this visit?', required: true, rows: 4 },
+    {
+      kind: 'radio',
+      name: 'reformFuture',
+      label: 'Do you see yourself engaging in criminal justice reform efforts in the future?',
+      required: true,
+      options: [
+        { label: 'Yes, I’m already involved and plan to continue.', value: 'already_involved_continue' },
+        { label: 'Yes, I’ve thought about it but haven’t taken action yet.', value: 'considering' },
+        { label: 'Maybe, depending on what I learn from this visit.', value: 'maybe' },
+        { label: 'No, this is just a one-time visit for me.', value: 'one_time' },
+        { label: 'Other', value: 'other' },
+      ],
+    },
+    { kind: 'textarea', name: 'additionalNotes', label: 'Is there anything else you’d like us to know before your visit? (Optional)', rows: 3 },
+  ],
+  // flat payload to match your schema
+  buildPayload: (v) => v,
+};
+
+// 5) Security Clearance Information
+export const securityConfig: SectionConfig = {
+  title: 'Security Clearance Information',
+  subtitle: 'Provide the ID details used for CDCR clearance.',
+  icon: <Shield className="h-6 w-6" />,
+  // apiPath: (id) => `/api/applications/${id ?? 'temp'}/security`,
+  columns: 1,
+  fields: [
+    {
+      kind: 'radio',
+      name: 'governmentIdType',
+      label: 'Type of ID used for clearance',
+      required: true,
+
+      options: [
+        { label: 'Driver’s License', value: 'driver_license' },
+        { label: 'Passport', value: 'passport' },
+      ],
+    },
+    {
+      kind: 'text',
+      name: 'governmentIdNumber',
+      label: 'Government ID Number (DL or Passport)',
+      required: true,
+      placeholder: 'D1234567 or 123456789',
+    },
+    {
+      kind: 'text',
+      name: 'idState',
+      label: 'State where your ID was issued',
+      required: true,
+      placeholder: 'CA, NY, TX',
+      showIf: (v) => v.governmentIdType === 'driver_license',
+    },
+    {
+      kind: 'date',
+      name: 'idExpiration',
+      label: 'ID expiration (MM-DD-YYYY)',
+      required: true,
+      placeholder: 'MM-DD-YYYY',
+    },
+    {
+      kind: 'radio',
+      name: 'ssnMethod',
+      label: 'How would you like to provide your SSN?',
+      required: true,
+      options: [
+        { label: 'Directly through this form', value: 'direct' },
+        { label: 'Call the Executive Director (phone method)', value: 'call' },
+        { label: 'Split: first five here, last four via text/email/call', value: 'split' },
+      ],
+    },
+    {
+      kind: 'text',
+      name: 'ssnFull',
+      label: 'Enter your full SSN',
+      placeholder: '123-45-6789',
+      required: true,
+      showIf: (v) => v.ssnMethod === 'direct',
+      helpText: 'Format: 123-45-6789 or 123456789',
+    },
+    {
+      kind: 'text',
+      name: 'ssnFirstFive',
+      label: 'Enter the first five digits of your SSN',
+      placeholder: '12345',
+      required: true,
+      showIf: (v) => v.ssnMethod === 'split',
+      helpText: 'Send the remaining four digits via text/email/voice.',
+    },
+    {
+      kind: 'radio',
+      name: 'formerInmate',
+      label: 'Have you ever been incarcerated?',
+      required: true,
+      options: [
+        { label: 'Yes', value: 'yes' },
+        { label: 'No', value: 'no' },
+      ],
+    },
+    {
+      kind: 'file',
+      name: 'wardenLetter',
+      label: 'Upload your letter to the Warden (PDF or image)',
+      required: true,
+      accept: '.pdf,image/*',
+      showIf: (v) => v.formerInmate === 'yes',
+    },
+    {
+      kind: 'radio',
+      name: 'onParole',
+      label: 'Are you currently on parole?',
+      required: true,
+      options: [
+        { label: 'Yes', value: 'yes' },
+        { label: 'No', value: 'no' },
+      ],
+    },
+    {
+      kind: 'text',
+      name: 'digitalSignature',
+      label: 'Please type your full name as a digital signature',
+      required: true,
+    },
+    {
+      kind: 'checkbox',
+      name: 'confirmAccuracy',
+      label: 'I confirm the information is accurate and truthful.',
+      required: true,
+    },
+    {
+      kind: 'checkbox',
+      name: 'consentToDataUse',
+      label:
+        'I consent to the use of my information solely for security clearance and entry to San Quentin SkunkWorks (impact answers may be used anonymously).',
+      required: true,
+    },
+  ],
+
+  // NEW: field-level validation
+  validate: (v) => {
+    const e: Record<string, string> = {};
+
+    // Expiration date must be real + today or future
+    if (!isRealDateMMDDYYYY(v.idExpiration)) {
+      e.idExpiration = 'Use a real date in MM-DD-YYYY';
+    } else if (!isFutureOrTodayMMDDYYYY(v.idExpiration)) {
+      e.idExpiration = 'ID is expired';
+    }
+
+    // Gov ID required + format by type
+    const gov = validateGovId(v.governmentIdType, v.governmentIdNumber);
+    if (!gov.ok) e.governmentIdNumber = gov.msg!;
+
+    // idState required only for DL; must be empty for passport
+    if (v.governmentIdType === 'driver_license') {
+      if (!v.idState || !/^[A-Z]{2}$/i.test(String(v.idState).trim())) {
+        e.idState = 'Use 2-letter state code (e.g., CA, NY)';
+      }
+    } else if (v.governmentIdType === 'passport') {
+      if (v.idState && String(v.idState).trim() !== '') {
+        e.idState = 'Do not provide a state for passports';
+      }
+    }
+
+    // SSN checks based on method
+    if (v.ssnMethod === 'direct') {
+      const ssn = normalizeAndValidateSSN(v.ssnFull);
+      if (!ssn.ok) e.ssnFull = ssn.msg!;
+    } else if (v.ssnMethod === 'split') {
+      const first5 = onlyDigits(v.ssnFirstFive || '');
+      if (first5.length !== 5) e.ssnFirstFive = 'Enter exactly 5 digits';
+    }
+
+    // Warden letter required when former inmate
+    if (v.formerInmate === 'yes' && !(v.wardenLetter instanceof File)) {
+      e.wardenLetter = 'Please upload your letter to the Warden';
+    }
+
+    return e;
+  },
+
+
+ buildPayload: (v) => {
+    const pl: Record<string, any> = { ...v };
+
+    // normalize gov id
+    const gov = validateGovId(pl.governmentIdType, pl.governmentIdNumber);
+    if (gov.ok) pl.governmentIdNumber = gov.normalized;
+
+    // normalize SSN pieces (digits only)
+    if (pl.ssnFull) pl.ssnFull = onlyDigits(pl.ssnFull);
+    if (pl.ssnFirstFive) pl.ssnFirstFive = onlyDigits(pl.ssnFirstFive).slice(0, 5);
+
+    // file: keep just a name for now
+    if (pl.wardenLetter instanceof File) {
+      pl.wardenLetterName = pl.wardenLetter.name;
+      delete pl.wardenLetter;
+    }
+
+    // booleans
+    pl.formerInmate = pl.formerInmate === 'yes';
+    pl.onProbationParole = pl.onParole === 'yes';
+    delete pl.onParole;
+
+    // uppercase state
+    if (pl.idState) pl.idState = String(pl.idState).trim().toUpperCase();
+
+    return pl;
+  },
 };
