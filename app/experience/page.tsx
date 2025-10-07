@@ -1,9 +1,12 @@
 'use client';
-import { useRouter, useSearchParams } from 'next/navigation';
+
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { SectionForm, experienceConfig } from '@/components/SectionForm';
+import { nextRoute } from '@/utils/form-routes';
 
 export default function ExperiencePage() {
   const router = useRouter();
+  const pathname = usePathname();
   const params = useSearchParams();
   const id = params.get('id') ?? undefined;
 
@@ -12,9 +15,13 @@ export default function ExperiencePage() {
       <SectionForm
         applicationId={id}
         config={experienceConfig}
+        clearOnSuccess
         onSubmit={async (payload) => {
-          console.log('SUBMIT /experience', payload);
-          router.push(`/security${id ? `?id=${id}` : ''}`);
+        //   // optional: dev-only peek (avoid logging PII in prod)
+        //   if (process.env.NODE_ENV === 'development') {
+        //     console.log('SUBMIT /experience', { ...payload, ssnFull: payload?.ssnFull ? '***redacted***' : undefined });
+        //   }
+          router.push(nextRoute(pathname, id));
         }}
       />
     </main>
