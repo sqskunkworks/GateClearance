@@ -8,7 +8,7 @@ export default function TestSupabasePage() {
 
   useEffect(() => {
     const testConnection = async () => {
-      const { data, error } = await supabase.from('your_table_name').select('*').limit(1);
+      const { data, error } = await supabase.from('applications').select('*').limit(1);
       if (error) setMessage(`Error: ${error.message}`);
       else setMessage(`Success! Fetched ${data.length} row(s).`);
     };
