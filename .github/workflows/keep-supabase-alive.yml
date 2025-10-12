@@ -1,0 +1,66 @@
+name: Keep Supabase Database Alive
+
+on:
+  schedule:
+    # Runs every 4 days at 3:00 AM UTC (adjust as needed)
+    # Cron format: minute hour day month weekday
+    - cron: '0 3 */4 * *'
+  workflow_dispatch: # Allows manual triggering from GitHub UI
+
+jobs:
+  ping-database:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          npm install @supabase/supabase-js
+
+      - name: Ping Supabase Database
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          node << 'EOF'
+          const { createClient } = require('@supabase/supabase-js');
+          
+          const supabaseUrl = process.env.SUPABASE_URL;
+          const supabaseKey = process.env.SUPABASE_ANON_KEY;
+          
+          const supabase = createClient(supabaseUrl, supabaseKey);
+          
+          async function pingDatabase() {
+            try {
+              // Simple query to keep database active
+              const { data, error } = await supabase
+                .from('applications')
+                .select('count', { count: 'exact', head: true });
+              
+              if (error) {
+                console.error('Error pinging database:', error);
+                process.exit(1);
+              }
+              
+              console.log('Successfully pinged Supabase database at:', new Date().toISOString());
+              console.log('Database is active and responding.');
+            } catch (err) {
+              console.error('Unexpected error:', err);
+              process.exit(1);
+            }
+          }
+          
+          pingDatabase();
+          EOF
+
+      - name: Report Status
+        if: always()
+        run: |
+          echo "Ping completed at $(date)"
