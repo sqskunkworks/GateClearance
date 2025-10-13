@@ -1,0 +1,44 @@
+name: Keep Supabase Database Alive
+
+on:
+  schedule:
+    - cron: '0 3 */4 * *'
+  workflow_dispatch:
+
+jobs:
+  ping-database:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Ping Supabase Database
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          # Query the health_check table to keep database active
+          echo "Making request to: $SUPABASE_URL/rest/v1/health_check?select=count"
+          
+          response=$(curl -s -w "\n%{http_code}" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            "$SUPABASE_URL/rest/v1/health_check?select=count")
+          
+          echo "Full response:"
+          echo "$response"
+          
+          http_code=$(echo "$response" | tail -n1)
+          echo "Extracted HTTP code: '$http_code'"
+          
+          if [ "$http_code" = "200" ]; then
+            echo "Successfully pinged Supabase database at: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+            echo "Database is active and responding"
+            exit 0
+          else
+            echo "Error pinging database: HTTP $http_code"
+            exit 1
+          fi
+
+      - name: Report Status
+        if: always()
+        run: |
+          echo "Ping completed at $(date)"
