@@ -15,18 +15,19 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          set -e
           echo "Starting health check..."
+          echo "URL: ${SUPABASE_URL}/rest/v1/health_check?select=count"
           
-          # Make the request
+          # Make the request (don't exit on error)
           HTTP_CODE=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
             -H "apikey: ${SUPABASE_ANON_KEY}" \
             -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-            "${SUPABASE_URL}/rest/v1/health_check?select=count")
+            "${SUPABASE_URL}/rest/v1/health_check?select=count" || echo "000")
           
           echo "HTTP Response Code: $HTTP_CODE"
           echo "Response body:"
-          cat /tmp/response.txt
+          cat /tmp/response.txt || echo "No response file"
+          echo ""
           
           if [ "$HTTP_CODE" = "200" ]; then
             echo "✓ Successfully pinged Supabase database at: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
