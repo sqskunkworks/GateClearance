@@ -12,54 +12,27 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install dependencies
-        run: |
-          npm install @supabase/supabase-js
-
       - name: Ping Supabase Database
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          node << 'EOF'
-          const { createClient } = require('@supabase/supabase-js');
+          # Query the health_check table to keep database active
+          response=$(curl -s -w "\n%{http_code}" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            "$SUPABASE_URL/rest/v1/health_check?select=count")
           
-          const supabaseUrl = process.env.SUPABASE_URL;
-          const supabaseKey = process.env.SUPABASE_ANON_KEY;
+          http_code=$(echo "$response" | tail -n1)
           
-          const supabase = createClient(supabaseUrl, supabaseKey);
-          
-          async function pingDatabase() {
-            try {
-              // Simple query to keep database active
-              // Replace 'your_table_name' with an actual table in your database
-              const { data, error } = await supabase
-                .from('your_table_name')
-                .select('count', { count: 'exact', head: true });
-              
-              if (error) {
-                console.error('Error pinging database:', error);
-                process.exit(1);
-              }
-              
-              console.log('Successfully pinged Supabase database at:', new Date().toISOString());
-              console.log('Database is active and responding.');
-            } catch (err) {
-              console.error('Unexpected error:', err);
-              process.exit(1);
-            }
-          }
-          
-          pingDatabase();
-          EOF
+          if [ "$http_code" -eq 200 ]; then
+            echo "Successfully pinged Supabase database at: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+            echo "Database is active and responding"
+            exit 0
+          else
+            echo "Error pinging database: HTTP $http_code"
+            exit 1
+          fi
 
       - name: Report Status
         if: always()
