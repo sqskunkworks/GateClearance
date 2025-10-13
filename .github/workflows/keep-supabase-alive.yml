@@ -40,8 +40,9 @@ jobs:
           async function pingDatabase() {
             try {
               // Simple query to keep database active
+              // Replace 'your_table_name' with an actual table in your database
               const { data, error } = await supabase
-                .from('applications')
+                .from('your_table_name')
                 .select('count', { count: 'exact', head: true });
               
               if (error) {
