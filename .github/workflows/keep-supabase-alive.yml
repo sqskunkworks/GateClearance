@@ -2,10 +2,8 @@ name: Keep Supabase Database Alive
 
 on:
   schedule:
-    # Runs every 4 days at 3:00 AM UTC (adjust as needed)
-    # Cron format: minute hour day month weekday
     - cron: '0 3 */4 * *'
-  workflow_dispatch: # Allows manual triggering from GitHub UI
+  workflow_dispatch:
 
 jobs:
   ping-database:
@@ -17,24 +15,27 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          # Query the health_check table to keep database active
-          response=$(curl -s -w "\n%{http_code}" \
-            -H "apikey: $SUPABASE_ANON_KEY" \
-            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
-            "$SUPABASE_URL/rest/v1/health_check?select=count")
+          set -e
+          echo "Starting health check..."
           
-          http_code=$(echo "$response" | tail -n1)
+          # Make the request
+          HTTP_CODE=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            "${SUPABASE_URL}/rest/v1/health_check?select=count")
           
-          if [ "$http_code" -eq 200 ]; then
-            echo "Successfully pinged Supabase database at: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-            echo "Database is active and responding"
+          echo "HTTP Response Code: $HTTP_CODE"
+          echo "Response body:"
+          cat /tmp/response.txt
+          
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✓ Successfully pinged Supabase database at: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
             exit 0
           else
-            echo "Error pinging database: HTTP $http_code"
+            echo "✗ Error: Received HTTP $HTTP_CODE"
             exit 1
           fi
 
       - name: Report Status
         if: always()
-        run: |
-          echo "Ping completed at $(date)"
+        run: echo "Ping completed at $(date)"
