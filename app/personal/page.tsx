@@ -1,9 +1,10 @@
-
 'use client';
+
+import { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { SectionForm, personalConfig } from '@/components/SectionForm';
 
-export default function PersonalPage() {
+function PersonalInner() {
   const router = useRouter();
   const params = useSearchParams();
   const id = params.get('id') ?? undefined;
@@ -13,8 +14,18 @@ export default function PersonalPage() {
       <SectionForm
         applicationId={id}
         config={personalConfig}
-        onSubmit={async () => router.push(`/contact${id ? `?id=${id}` : ''}`)}
+        onSubmit={async () => {
+          router.push(`/contact${id ? `?id=${id}` : ''}`);
+        }}
       />
     </main>
+  );
+}
+
+export default function PersonalPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Loading…</div>}>
+      <PersonalInner />
+    </Suspense>
   );
 }

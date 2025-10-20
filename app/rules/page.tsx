@@ -1,9 +1,10 @@
-// app/rules/page.tsx
 'use client';
+
+import { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { SectionForm, rulesConfig } from '@/components/SectionForm';
 
-export default function RulesPage() {
+function RulesInner() {
   const router = useRouter();
   const params = useSearchParams();
   const id = params.get('id') ?? undefined;
@@ -13,8 +14,19 @@ export default function RulesPage() {
       <SectionForm
         applicationId={id}
         config={rulesConfig}
-        onSubmit={async () => router.push(`/next-step${id ? `?id=${id}` : ''}`)}
+        onSubmit={async () => {
+          // Final step — adjust destination as needed
+          router.push(`/`);
+        }}
       />
     </main>
+  );
+}
+
+export default function RulesPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Loading…</div>}>
+      <RulesInner />
+    </Suspense>
   );
 }

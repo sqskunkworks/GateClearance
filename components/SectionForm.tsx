@@ -1,16 +1,9 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, User, Building2, CheckCircle2, AlertTriangle } from 'lucide-react';
-
-/**
- * SectionForm.tsx
- * ------------------------------------------------------
- * A single, reusable form section component rendered from a config.
- * Three ready-made configs are exported: rulesConfig, personalConfig, contactOrgConfig.
- * Styling: Tailwind v4; 
- */
+import SignaturePad, { SignaturePadHandle } from '@/components/SignaturePad';
 
 /* ============================
    Types
@@ -22,15 +15,15 @@ export type FieldBase = {
   helpText?: string;
   placeholder?: string;
   span?: 1 | 2;
-  // allows conditional display based on current values
-  showIf?: (values: Record<string, any>) => boolean;
-
+  showIf?: (values: Record<string, unknown>) => boolean;
 };
 
 export type RadioOption = { label: string; value: string };
 
+type TextKinds = 'text' | 'email' | 'tel' | 'date';
+
 export type Field =
-  | (FieldBase & { kind: 'text' | 'email' | 'tel' | 'date' })
+  | (FieldBase & { kind: TextKinds })
   | (FieldBase & { kind: 'textarea'; rows?: number })
   | (FieldBase & {
       kind: 'radio';
@@ -39,34 +32,39 @@ export type Field =
       wrongCallout?: { title?: string; points: string[] };
     })
   | (FieldBase & { kind: 'checkbox' })
-  | (FieldBase & { kind: 'file'; accept?: string });
+  | (FieldBase & { kind: 'file'; accept?: string })
+  | (FieldBase & { kind: 'signature'; height?: number });
 
+export type SectionConfig = {
+  title: string;
+  subtitle?: string;
+  icon?: React.ReactNode;
+  fields: Field[];
+  validate?: (values: Record<string, unknown>) => Record<string, string>;
+  buildPayload?: (values: Record<string, unknown>) => Record<string, unknown>;
+  apiPath?: (applicationId?: string) => string;
+  ctaLabel?: string;
+  columns?: 1 | 2;
+};
 
-
-  export type SectionConfig = {
-    title: string;
-    subtitle?: string;
-    icon?: React.ReactNode;
-    fields: Field[];
-    validate?: (values: Record<string, any>) => Record<string, string>;
-    buildPayload?: (values: Record<string, any>) => Record<string, any>;
-    apiPath?: (applicationId?: string) => string;
-    ctaLabel?: string;
-    columns?: 1 | 2; // NEW
-  };
-  
 export type SectionFormProps = {
   applicationId?: string;
   config: SectionConfig;
-  initialValues?: Record<string, any>;
+  initialValues?: Record<string, unknown>;
   clearOnSuccess?: boolean;
-  onSubmit?: (values: Record<string, any>) => Promise<void> | void;
+  onSubmit?: (values: Record<string, unknown>) => Promise<void> | void;
 };
 
-/* =======
-   UI
-   ======== */
-const SectionHeader = ({ title, subtitle, icon }: { title: string; subtitle?: string; icon?: React.ReactNode }) => (
+/* ======= UI bits ======= */
+const SectionHeader = ({
+  title,
+  subtitle,
+  icon,
+}: {
+  title: string;
+  subtitle?: string;
+  icon?: React.ReactNode;
+}) => (
   <div className="border-b border-gray-200 bg-white/90 backdrop-blur">
     <div className="mx-auto max-w-3xl px-4 py-5">
       <div className="flex items-center gap-3">
@@ -78,9 +76,6 @@ const SectionHeader = ({ title, subtitle, icon }: { title: string; subtitle?: st
   </div>
 );
 
-
-
-
 const Card = ({ children }: { children: React.ReactNode }) => (
   <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">{children}</div>
 );
@@ -88,14 +83,18 @@ const Card = ({ children }: { children: React.ReactNode }) => (
 const Input = (props: React.InputHTMLAttributes<HTMLInputElement>) => (
   <input
     {...props}
-    className={`w-full rounded-xl border border-gray-300 p-2 text-sm outline-none transition-colors focus:border-black focus:ring-1 focus:ring-black ${props.className || ''}`}
+    className={`w-full rounded-xl border border-gray-300 p-2 text-sm outline-none transition-colors focus:border-black focus:ring-1 focus:ring-black ${
+      props.className || ''
+    }`}
   />
 );
 
 const TextArea = (props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => (
   <textarea
     {...props}
-    className={`min-h-[96px] w-full rounded-xl border border-gray-300 p-2 text-sm outline-none transition-colors focus:border-black focus:ring-1 focus:ring-black ${props.className || ''}`}
+    className={`min-h-[96px] w-full rounded-xl border border-gray-300 p-2 text-sm outline-none transition-colors focus:border-black focus:ring-1 focus:ring-black ${
+      props.className || ''
+    }`}
   />
 );
 
@@ -119,29 +118,22 @@ const ErrorCallout = ({ title, points }: { title?: string; points: string[] }) =
   </AnimatePresence>
 );
 
-/* ==========
-   Helpers
-   ============== */
-const isEmail = (v: string) => /.+@.+\..+/.test(v.trim());
+/* ======= Type guards ======= */
+const isTextarea = (f: Field): f is Extract<Field, { kind: 'textarea' }> => f.kind === 'textarea';
+const isTextInput = (f: Field): f is Extract<Field, { kind: TextKinds }> =>
+  f.kind === 'text' || f.kind === 'email' || f.kind === 'tel' || f.kind === 'date';
+const isRadio = (f: Field): f is Extract<Field, { kind: 'radio' }> => f.kind === 'radio';
+const isFile = (f: Field): f is Extract<Field, { kind: 'file' }> => f.kind === 'file';
+const isSignature = (f: Field): f is Extract<Field, { kind: 'signature' }> => f.kind === 'signature';
 
-const digits = (s: string) => s.replace(/\D/g, '');
+/* ======= Helpers ======= */
+const isEmail = (v: string) => /.+@.+\..+/.test(v.trim());
+const digitsOnly = (s: string) => s.replace(/\D/g, '');
 const isPhone = (v: string) => {
-  const d = digits(v);
+  const d = digitsOnly(v);
   return d.length >= 10 && d.length <= 15;
 };
-const isYMD = (v?: string) => !!(v && /^\d{4}-\d{2}-\d{2}$/.test(v));
-const isRealDateYMD = (v?: string) => {
-  if (!isYMD(v)) return false;
-  const [y, m, d] = (v as string).split('-').map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  return (
-    dt.getUTCFullYear() === y &&
-    dt.getUTCMonth() === m - 1 &&
-    dt.getUTCDate() === d
-  );
-};
 
-// Accepts strictly "MM-DD-YYYY" and checks real calendar date + year range
 const isRealDateMMDDYYYY = (
   s?: string,
   { minYear = 1900, maxYear = 2030 }: { minYear?: number; maxYear?: number } = {}
@@ -149,90 +141,107 @@ const isRealDateMMDDYYYY = (
   if (!s || !/^\d{2}-\d{2}-\d{4}$/.test(s)) return false;
   const [mm, dd, yyyy] = s.split('-').map(Number);
   if (yyyy < minYear || yyyy > maxYear) return false;
-
   const dt = new Date(Date.UTC(yyyy, mm - 1, dd));
-  return (
-    dt.getUTCFullYear() === yyyy &&
-    dt.getUTCMonth() === mm - 1 &&
-    dt.getUTCDate() === dd
-  );
+  return dt.getUTCFullYear() === yyyy && dt.getUTCMonth() === mm - 1 && dt.getUTCDate() === dd;
 };
 
-// ---------- PII validators & normalizers ----------
 const onlyDigits = (s: string) => (s || '').replace(/\D/g, '');
-const isAllSameDigits = (s: string) => /^([0-9])\1{8}$/.test(s); // 000000000, 111111111, ...
+const isAllSameDigits = (s: string) => /^([0-9])\1{8}$/.test(s);
 
-// SSN: accept 123-45-6789 or 123456789; must be 9 digits, reject trivial/invalid combos
 function normalizeAndValidateSSN(raw?: string) {
-  const digits = onlyDigits(raw || '');
-  if (digits.length !== 9) return { ok: false, digits, msg: 'SSN must be 9 digits' };
-  // reject obviously invalid patterns
-  const area = digits.slice(0, 3), group = digits.slice(3, 5), serial = digits.slice(5);
-  if (area === '000' || group === '00' || serial === '0000') {
-    return { ok: false, digits, msg: 'SSN format is invalid' };
-  }
-  if (isAllSameDigits(digits) || digits === '123456789') {
-    return { ok: false, digits, msg: 'SSN looks invalid' };
-  }
-  return { ok: true, digits };
+  const d = onlyDigits(raw || '');
+  if (d.length !== 9) return { ok: false, digits: d, msg: 'SSN must be 9 digits' };
+  const area = d.slice(0, 3),
+    group = d.slice(3, 5),
+    serial = d.slice(5);
+  if (area === '000' || group === '00' || serial === '0000') return { ok: false, digits: d, msg: 'SSN format is invalid' };
+  if (isAllSameDigits(d) || d === '123456789') return { ok: false, digits: d, msg: 'SSN looks invalid' };
+  return { ok: true, digits: d };
 }
 
-// US Passport (typical): 9 alphanumeric; Driver License: allow A–Z0–9, 5–20 chars
 function normalizeGovId(raw?: string) {
-  const s = (raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-  return s;
+  return (raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
-
 function validateGovId(type?: string, value?: string) {
   const s = normalizeGovId(value);
   if (!s) return { ok: false, msg: 'Government ID is required' };
-
   if (type === 'passport') {
-    if (!/^[A-Z0-9]{9}$/.test(s)) {
-      return { ok: false, msg: 'Passport # must be 9 letters/numbers' };
-    }
+    if (!/^[A-Z0-9]{9}$/.test(s)) return { ok: false, msg: 'Passport # must be 9 letters/numbers' };
   } else {
-    // driver’s license (generic, permissive)
-    if (s.length < 5 || s.length > 20) {
-      return { ok: false, msg: 'DL number must be 5–20 letters/numbers' };
-    }
+    if (s.length < 5 || s.length > 20) return { ok: false, msg: 'DL number must be 5–20 letters/numbers' };
   }
   return { ok: true, normalized: s };
 }
-
-// Date must be real (MM-DD-YYYY) and not in the past
 function isFutureOrTodayMMDDYYYY(s?: string) {
   if (!isRealDateMMDDYYYY(s)) return false;
   const [mm, dd, yyyy] = (s as string).split('-').map(Number);
   const d = new Date(yyyy, mm - 1, dd);
-  const today = new Date(); today.setHours(0,0,0,0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
   return d >= today;
 }
 
+/* ======= Signature field wrapper ======= */
+function SignatureField({
+  height,
+  onChange,
+}: {
+  height?: number;
+  onChange: (dataUrl: string) => void;
+}) {
+  const padRef = useRef<SignaturePadHandle>(null);
 
+  const handleSave = () => {
+    const pad = padRef.current;
+    if (!pad) return;
+    if (pad.isEmpty()) {
+      onChange('');
+      return;
+    }
+    onChange(pad.toDataURL());
+  };
 
+  return (
+    <div>
+      <SignaturePad ref={padRef} height={height ?? 160} />
+      <div className="mt-2 flex gap-2">
+        <button type="button" className="rounded bg-black px-3 py-1 text-sm text-white" onClick={handleSave}>
+          Save Signature
+        </button>
+        <button
+          type="button"
+          className="rounded border px-3 py-1 text-sm"
+          onClick={() => {
+            padRef.current?.clear();
+            onChange('');
+          }}
+        >
+          Clear
+        </button>
+      </div>
+    </div>
+  );
+}
 
-
-/* =============
-   Component
-   ================== */
-export function SectionForm({ applicationId, config, initialValues,clearOnSuccess, onSubmit }: SectionFormProps) {
-  const [values, setValues] = useState<Record<string, any>>(initialValues || {});
+/* ======= Component ======= */
+export function SectionForm({
+  applicationId,
+  config,
+  initialValues,
+  clearOnSuccess,
+  onSubmit,
+}: SectionFormProps) {
+  const [values, setValues] = useState<Record<string, unknown>>(initialValues || {});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [appId]=useState(applicationId);
- 
-  // Base validation
+  const [appId] = useState(applicationId);
+
   const baseErrors = useMemo(() => {
     const e: Record<string, string> = {};
-  
     for (const f of config.fields) {
-      // skip hidden fields
       if (f.showIf && !f.showIf(values)) continue;
-  
       const v = values[f.name];
-  
-      // required
+
       if (f.required) {
         if (f.kind === 'checkbox') {
           if (!v) e[f.name] = 'Required';
@@ -242,8 +251,7 @@ export function SectionForm({ applicationId, config, initialValues,clearOnSucces
           e[f.name] = 'Required';
         }
       }
-  
-      // type checks (only if not already errored)
+
       if (v != null && e[f.name] == null) {
         if (f.kind === 'email' && !isEmail(String(v))) e[f.name] = 'Invalid email';
         else if (f.kind === 'tel' && !isPhone(String(v))) e[f.name] = 'Invalid phone';
@@ -252,38 +260,29 @@ export function SectionForm({ applicationId, config, initialValues,clearOnSucces
         }
       }
     }
-  
     return e;
   }, [config.fields, values]);
-  
 
-  // Custom validation hook
   const customErrors = useMemo(() => (config.validate ? config.validate(values) : {}), [config, values]);
-  const errors = { ...baseErrors, ...customErrors } as Record<string, string>;
+  const errors = { ...baseErrors, ...customErrors };
 
-  // Quiz correctness (for radios with correctValue)
   const quizWrongByField = useMemo(() => {
     const wrong: Record<string, true> = {};
     for (const f of config.fields) {
-      if (f.kind === 'radio' && f.correctValue && values[f.name] && values[f.name] !== f.correctValue) {
+      if (isRadio(f) && f.correctValue && values[f.name] && (values[f.name] as string) !== f.correctValue) {
         wrong[f.name] = true;
       }
     }
     return wrong;
   }, [config.fields, values]);
 
-  const visibleRequired = config.fields.filter(
-    (f) => f.required && !(f.showIf && !f.showIf(values))
-  );
-  
+  const visibleRequired = config.fields.filter((f) => f.required && !(f.showIf && !f.showIf(values)));
   const requiredCount = visibleRequired.length;
-  
   const requiredSatisfied = visibleRequired.filter((f) => {
     const v = values[f.name];
     if (f.kind === 'checkbox') return !!v;
     return typeof v === 'string' ? v.trim().length > 0 : v != null;
   }).length;
-  
 
   const quizOk = Object.keys(quizWrongByField).length === 0;
   const canSubmit = requiredSatisfied === requiredCount && quizOk && Object.keys(errors).length === 0 && !submitting;
@@ -296,8 +295,8 @@ export function SectionForm({ applicationId, config, initialValues,clearOnSucces
     const payload = config.buildPayload ? config.buildPayload(values) : values;
     try {
       setSubmitting(true);
-      let ok = false; // NEW
-    
+      let ok = false;
+
       if (onSubmit) {
         await onSubmit(payload);
         ok = true;
@@ -305,22 +304,164 @@ export function SectionForm({ applicationId, config, initialValues,clearOnSucces
         await fetch(config.apiPath(appId), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ applicationId: appId, ...payload }), // use appId
+          body: JSON.stringify({ applicationId: appId, ...payload }),
         });
         ok = true;
       }
-    
-      // NEW: wipe client-side values if caller asked for it
+
       if (ok && clearOnSuccess) setValues({});
-    } catch (err: any) {
-      setSubmitError(err?.message || 'Failed to save');
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : 'Failed to save');
     } finally {
       setSubmitting(false);
     }
-    
   }
 
-  const cols = config.columns ?? 2; // default two columns on desktop
+  const cols = config.columns ?? 2;
+
+  /** IMPORTANT: coerce map() return to ReactNode to avoid “unknown not assignable to ReactNode” */
+  const renderedFields: React.ReactNode[] = config.fields.map((f): React.ReactNode => {
+    if (f.showIf && !f.showIf(values)) return null;
+
+    return (
+      <div key={f.name} className={isTextarea(f) || f.span === 2 ? 'md:col-span-2' : ''}>
+        <label className="block text-sm font-medium text-gray-800" htmlFor={f.name}>
+          {f.label}
+          {f.required && <span className="text-red-600"> *</span>}
+        </label>
+
+        {/* textarea */}
+        {isTextarea(f) ? (
+          <TextArea
+            id={f.name}
+            placeholder={f.placeholder}
+            rows={f.rows ?? 4}
+            value={(values[f.name] as string) ?? ''}
+            onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
+          />
+        ) : null}
+
+        {/* text|email|tel|date */}
+        {isTextInput(f) ? (
+          f.kind === 'date' ? (
+            <Input
+              id={f.name}
+              type="text"
+              inputMode="numeric"
+              placeholder={f.placeholder || 'MM-DD-YYYY'}
+              value={(values[f.name] as string) ?? ''}
+              onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
+            />
+          ) : (
+            <Input
+              id={f.name}
+              type={f.kind}
+              placeholder={f.placeholder}
+              value={(values[f.name] as string) ?? ''}
+              onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
+            />
+          )
+        ) : null}
+
+        {/* radio */}
+        {isRadio(f) ? (
+          <div className="mt-1 grid grid-cols-1 gap-2">
+            {f.options.map((opt) => {
+              const selected = (values[f.name] as string) === opt.value;
+              return (
+                <label
+                  key={opt.value}
+                  className={`flex items-center justify-between gap-2 rounded-xl border px-4 py-2 text-sm ${
+                    selected ? 'border-black bg-black text-white' : 'border-gray-300 hover:border-gray-400'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="radio"
+                      name={f.name}
+                      value={opt.value}
+                      className="h-4 w-4 accent-black"
+                      checked={selected}
+                      onChange={() => setValues((v) => ({ ...v, [f.name]: opt.value }))}
+                    />
+                    <span>{opt.label}</span>
+                  </div>
+                  {selected && <CheckCircle2 className="h-5 w-5" />}
+                </label>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {/* checkbox */}
+        {f.kind === 'checkbox' ? (
+          <label className="mt-1 flex items-start gap-3 text-sm text-gray-800">
+            <input
+              id={f.name}
+              type="checkbox"
+              className="mt-1 h-4 w-4 accent-black"
+              checked={Boolean(values[f.name])}
+              onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.checked }))}
+            />
+            <span>{f.label}</span>
+          </label>
+        ) : null}
+
+        {/* signature */}
+        {isSignature(f) ? (
+          <SignatureField
+            height={f.height}
+            onChange={(dataUrl) => setValues((v) => ({ ...v, [f.name]: dataUrl }))}
+          />
+        ) : null}
+
+        {/* file (custom-styled) */}
+        {isFile(f) ? (
+          <div className="mt-1">
+            <input
+              id={f.name}
+              type="file"
+              accept={f.accept}
+              className="sr-only"
+              onChange={(e) => {
+                const file = e.target.files?.[0] ?? null;
+                setValues((v) => ({ ...v, [f.name]: file ?? undefined }));
+              }}
+            />
+            <label
+              htmlFor={f.name}
+              className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm cursor-pointer hover:bg-gray-50"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+                <path d="M7 9l5-5 5 5" />
+                <path d="M12 4v12" />
+              </svg>
+              {values[f.name] instanceof File ? 'Change file' : 'Upload file'}
+            </label>
+            <div className="mt-2 text-xs text-gray-600">
+              {values[f.name] instanceof File ? (
+                <>
+                  Selected: <span className="font-medium">{(values[f.name] as File).name}</span>
+                </>
+              ) : (
+                <>Accepted: {f.accept || 'any file'}</>
+              )}
+            </div>
+          </div>
+        ) : null}
+
+        {/* help/error */}
+        {f.helpText ? <p className="mt-1 text-xs text-gray-600">{f.helpText}</p> : null}
+        {errors[f.name] ? <p className="mt-1 text-xs text-red-600">{errors[f.name]}</p> : null}
+
+        {/* Wrong-answer callout for quiz radios */}
+        {isRadio(f) && f.correctValue && values[f.name] && (values[f.name] as string) !== f.correctValue ? (
+          <ErrorCallout title={f.wrongCallout?.title} points={f.wrongCallout?.points || []} />
+        ) : null}
+      </div>
+    );
+  });
 
   return (
     <form onSubmit={handleSubmit} className="min-h-dvh bg-gradient-to-b from-gray-50 to-white">
@@ -329,146 +470,8 @@ export function SectionForm({ applicationId, config, initialValues,clearOnSucces
       <div className="mx-auto max-w-3xl space-y-6 px-4 py-6">
         <Card>
           <div className={`grid grid-cols-1 gap-4 ${cols === 2 ? 'md:grid-cols-2' : 'md:grid-cols-1'}`}>
-          {config.fields.map((f) => {
-    if (f.showIf && !f.showIf(values)) return null; // respect showIf
-    return (
-              <div key={f.name} className={f.kind === 'textarea' || f.span === 2 ? 'md:col-span-2' : ''}>
-                <label className="block text-sm font-medium text-gray-800" htmlFor={f.name}>
-                  {f.label}
-                  {f.required && <span className="text-red-600"> *</span>}
-                </label>
-
-                {/* kind = textarea */}
-                {f.kind === 'textarea' && (
-                  <TextArea
-                    id={f.name}
-                    placeholder={f.placeholder}
-                    rows={(f as any).rows || 4}
-                    value={values[f.name] ?? ''}
-                    onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
-                  />
-                )}
-
-                {/* kind = text|email|tel|date */}
-               {/* DATE: strict MM-DD-YYYY */}
-{f.kind === 'date' ? (
-  <Input
-    id={f.name}
-    type="text"
-    inputMode="numeric"
-    placeholder={f.placeholder || 'MM-DD-YYYY'}
-    value={values[f.name] ?? ''}
-    onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
-  />
-) : (
-  (f.kind === 'text' || f.kind === 'email' || f.kind === 'tel') && (
-    <Input
-      id={f.name}
-      type={f.kind === 'text' ? 'text' : f.kind}
-      placeholder={f.placeholder}
-      value={values[f.name] ?? ''}
-      onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
-    />
-  )
-)}
-
-
-                {/* kind = radio */}
-                {f.kind === 'radio' && (
-                  <div className="mt-1 grid grid-cols-1 gap-2">
-                    {(f as any).options.map((opt: RadioOption) => (
-                      <label
-                        key={opt.value}
-                        className={`flex items-center justify-between gap-2 rounded-xl border px-4 py-2 text-sm ${
-                          values[f.name] === opt.value
-                            ? 'border-black bg-black text-white'
-                            : 'border-gray-300 hover:border-gray-400'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="radio"
-                            name={f.name}
-                            value={opt.value}
-                            className="h-4 w-4 accent-black"
-                            checked={values[f.name] === opt.value}
-                            onChange={() => setValues((v) => ({ ...v, [f.name]: opt.value }))}
-                          />
-                          <span>{opt.label}</span>
-                        </div>
-                        {values[f.name] === opt.value && <CheckCircle2 className="h-5 w-5" />}
-                      </label>
-                    ))}
-                  </div>
-                )}
-
-                {/* kind = checkbox */}
-                {f.kind === 'checkbox' && (
-                  <label className="mt-1 flex items-start gap-3 text-sm text-gray-800">
-                    <input
-                      id={f.name}
-                      type="checkbox"
-                      className="mt-1 h-4 w-4 accent-black"
-                      checked={!!values[f.name]}
-                      onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.checked }))}
-                    />
-                    <span>{f.label}</span>
-                  </label>
-                )}
-
-{/* kind = file */}
-{/* kind = file (custom-styled) */}
-{f.kind === 'file' && (
-  <div className="mt-1">
-    {/* Hidden native input */}
-    <input
-      id={f.name}
-      type="file"
-      accept={(f as any).accept}
-      className="sr-only"
-      onChange={(e) => {
-        const file = e.target.files?.[0] || null;
-        setValues((v) => ({ ...v, [f.name]: file }));
-      }}
-    />
-
-    {/* Pretty label acts as button */}
-    <label
-      htmlFor={f.name}
-      className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm cursor-pointer hover:bg-gray-50"
-    >
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-        <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
-        <path d="M7 9l5-5 5 5" />
-        <path d="M12 4v12" />
-      </svg>
-      {values[f.name] instanceof File ? 'Change file' : 'Upload file'}
-    </label>
-
-    {/* Filename / helper */}
-    <div className="mt-2 text-xs text-gray-600">
-      {values[f.name] instanceof File
-        ? <>Selected: <span className="font-medium">{(values[f.name] as File).name}</span></>
-        : <>Accepted: {(f as any).accept || 'any file'}</>}
-    </div>
-  </div>
-)}
-
-
-
-
-                {/* help/error */}
-                {f.helpText && <p className="mt-1 text-xs text-gray-600">{f.helpText}</p>}
-                {errors[f.name] && <p className="mt-1 text-xs text-red-600">{errors[f.name]}</p>}
-
-                {/* Wrong-answer callout for quiz radios */}
-                {f.kind === 'radio' && (f as any).correctValue && values[f.name] && values[f.name] !== (f as any).correctValue && (
-                  <ErrorCallout title={(f as any).wrongCallout?.title} points={(f as any).wrongCallout?.points || []} />
-                )}
-             </div>
-    );
-  })}
-</div>
+            {renderedFields}
+          </div>
 
           {submitError && <p className="mt-3 text-sm text-red-700">{submitError}</p>}
         </Card>
@@ -495,11 +498,18 @@ export function SectionForm({ applicationId, config, initialValues,clearOnSucces
   );
 }
 
+/* ============================
+   Ready-made configs (unchanged content)
+   ============================ */
+
+// (keep your existing rulesConfig, personalConfig, contactOrgConfig, experienceConfig, securityConfig here — unchanged)
+
+
 /* ==========
-   Ready-made configs for the sections
+   Ready-made configs (same content, strict typing)
    ========== */
 
-// 1) Rules & Acknowledgment — single column temp
+// 1) Rules & Acknowledgment
 export const rulesConfig: SectionConfig = {
   title: 'Review & Acknowledgment',
   subtitle: 'Confirm your understanding of key rules before your visit.',
@@ -529,7 +539,7 @@ export const rulesConfig: SectionConfig = {
           'No denim, sweats, shorts, or sleeveless shirts.',
           'No revealing or form-fitting attire.',
           'Dress professionally or business casual.',
-          'No white T‑shirts.',
+          'No white T-shirts.',
           'When in doubt, wear black. Black is always a safe choice.',
         ],
       },
@@ -597,17 +607,17 @@ export const rulesConfig: SectionConfig = {
     },
     { kind: 'checkbox', name: 'ack', label: 'I have reviewed and agree to follow all rules and guidelines', required: true },
   ],
-  buildPayload: (v) => ({
-    rulesColor: v.color,
-    rulesPhonePolicy: v.phonePolicy,
-    rulesShareContact: v.shareContact,
-    rulesWrittenMaterials: v.writtenMaterials,
-    acknowledgmentAgreement: !!v.ack,
-  }),
-  
+  buildPayload: (v) =>
+    ({
+      rulesColor: v.color,
+      rulesPhonePolicy: v.phonePolicy,
+      rulesShareContact: v.shareContact,
+      rulesWrittenMaterials: v.writtenMaterials,
+      acknowledgmentAgreement: !!v.ack,
+    } as Record<string, unknown>),
 };
 
-// 2) Personal Information — two columns temp
+// 2) Personal Information
 export const personalConfig: SectionConfig = {
   title: 'Personal Information',
   subtitle: 'Match your legal ID. Use full legal name.',
@@ -635,16 +645,15 @@ export const personalConfig: SectionConfig = {
   ],
   validate: (v) => {
     const e: Record<string, string> = {};
-    if (!isRealDateMMDDYYYY(v.dateOfBirth)) {
+    if (!isRealDateMMDDYYYY(v.dateOfBirth as string)) {
       e.dateOfBirth = 'Use a real date in MM-DD-YYYY (1900–2030)';
     }
     return e;
   },
-  
   buildPayload: (v) => v,
 };
 
-// 3) Contact & Organization — two columns temp
+// 3) Contact & Organization
 export const contactOrgConfig: SectionConfig = {
   title: 'Contact & Organization',
   subtitle: 'We’ll use this for visit planning and updates.',
@@ -661,22 +670,19 @@ export const contactOrgConfig: SectionConfig = {
   buildPayload: (v) => v,
 };
 
-
 // 4) Prior Experience & Expectations
 export const experienceConfig: SectionConfig = {
-  columns:1,
+  columns: 1,
   title: 'Prior Experience & Expectations',
   subtitle: 'There are no right or wrong answers—just your honest thoughts.',
   icon: <User className="h-6 w-6" />,
-  // backend route to add later:
-  // apiPath: (id) => `/api/applications/${id ?? 'temp'}/experience`,
   fields: [
     {
       kind: 'radio',
       name: 'engagedDirectly',
       label: 'Have you ever engaged directly with incarcerated people before?',
       required: true,
-      span: 2, 
+      span: 2,
       options: [
         { label: 'No, this is my first time directly engaging with incarcerated people.', value: 'no_first_time' },
         { label: 'Yes, I have a personal connection (e.g., family/friends).', value: 'personal_connection' },
@@ -716,7 +722,6 @@ export const experienceConfig: SectionConfig = {
     },
     { kind: 'textarea', name: 'additionalNotes', label: 'Is there anything else you’d like us to know before your visit? (Optional)', rows: 3 },
   ],
-  // flat payload to match your schema
   buildPayload: (v) => v,
 };
 
@@ -725,7 +730,6 @@ export const securityConfig: SectionConfig = {
   title: 'Security Clearance Information',
   subtitle: 'Provide the ID details used for CDCR clearance.',
   icon: <Shield className="h-6 w-6" />,
-  // apiPath: (id) => `/api/applications/${id ?? 'temp'}/security`,
   columns: 1,
   fields: [
     {
@@ -733,7 +737,6 @@ export const securityConfig: SectionConfig = {
       name: 'governmentIdType',
       label: 'Type of ID used for clearance',
       required: true,
-
       options: [
         { label: 'Driver’s License', value: 'driver_license' },
         { label: 'Passport', value: 'passport' },
@@ -819,16 +822,17 @@ export const securityConfig: SectionConfig = {
       ],
     },
     {
-      kind: 'text',
-      name: 'digitalSignature',
-      label: 'Please type your full name as a digital signature',
-      required: true,
-    },
-    {
       kind: 'checkbox',
       name: 'confirmAccuracy',
       label: 'I confirm the information is accurate and truthful.',
       required: true,
+    },
+    {
+      kind: 'signature',
+      name: 'digitalSignature',
+      label: 'Please sign inside the box (digital signature)',
+      required: true,
+      span: 2,
     },
     {
       kind: 'checkbox',
@@ -839,42 +843,33 @@ export const securityConfig: SectionConfig = {
     },
   ],
 
-  // NEW: field-level validation
   validate: (v) => {
     const e: Record<string, string> = {};
 
-    // Expiration date must be real + today or future
-    if (!isRealDateMMDDYYYY(v.idExpiration)) {
+    if (!isRealDateMMDDYYYY(v.idExpiration as string)) {
       e.idExpiration = 'Use a real date in MM-DD-YYYY';
-    } else if (!isFutureOrTodayMMDDYYYY(v.idExpiration)) {
+    } else if (!isFutureOrTodayMMDDYYYY(v.idExpiration as string)) {
       e.idExpiration = 'ID is expired';
     }
 
-    // Gov ID required + format by type
-    const gov = validateGovId(v.governmentIdType, v.governmentIdNumber);
+    const gov = validateGovId(v.governmentIdType as string | undefined, v.governmentIdNumber as string | undefined);
     if (!gov.ok) e.governmentIdNumber = gov.msg!;
 
-    // idState required only for DL; must be empty for passport
     if (v.governmentIdType === 'driver_license') {
-      if (!v.idState || !/^[A-Z]{2}$/i.test(String(v.idState).trim())) {
-        e.idState = 'Use 2-letter state code (e.g., CA, NY)';
-      }
+      const st = String(v.idState ?? '').trim();
+      if (!/^[A-Z]{2}$/i.test(st)) e.idState = 'Use 2-letter state code (e.g., CA, NY)';
     } else if (v.governmentIdType === 'passport') {
-      if (v.idState && String(v.idState).trim() !== '') {
-        e.idState = 'Do not provide a state for passports';
-      }
+      if ((v.idState as string | undefined)?.trim()) e.idState = 'Do not provide a state for passports';
     }
 
-    // SSN checks based on method
     if (v.ssnMethod === 'direct') {
-      const ssn = normalizeAndValidateSSN(v.ssnFull);
+      const ssn = normalizeAndValidateSSN(v.ssnFull as string | undefined);
       if (!ssn.ok) e.ssnFull = ssn.msg!;
     } else if (v.ssnMethod === 'split') {
-      const first5 = onlyDigits(v.ssnFirstFive || '');
+      const first5 = onlyDigits((v.ssnFirstFive as string | undefined) || '');
       if (first5.length !== 5) e.ssnFirstFive = 'Enter exactly 5 digits';
     }
 
-    // Warden letter required when former inmate
     if (v.formerInmate === 'yes' && !(v.wardenLetter instanceof File)) {
       e.wardenLetter = 'Please upload your letter to the Warden';
     }
@@ -882,30 +877,24 @@ export const securityConfig: SectionConfig = {
     return e;
   },
 
+  buildPayload: (v) => {
+    const pl: Record<string, unknown> = { ...v };
 
- buildPayload: (v) => {
-    const pl: Record<string, any> = { ...v };
-
-    // normalize gov id
-    const gov = validateGovId(pl.governmentIdType, pl.governmentIdNumber);
+    const gov = validateGovId(pl.governmentIdType as string | undefined, pl.governmentIdNumber as string | undefined);
     if (gov.ok) pl.governmentIdNumber = gov.normalized;
 
-    // normalize SSN pieces (digits only)
-    if (pl.ssnFull) pl.ssnFull = onlyDigits(pl.ssnFull);
-    if (pl.ssnFirstFive) pl.ssnFirstFive = onlyDigits(pl.ssnFirstFive).slice(0, 5);
+    if (pl.ssnFull) pl.ssnFull = onlyDigits(pl.ssnFull as string);
+    if (pl.ssnFirstFive) pl.ssnFirstFive = onlyDigits(pl.ssnFirstFive as string).slice(0, 5);
 
-    // file: keep just a name for now
     if (pl.wardenLetter instanceof File) {
-      pl.wardenLetterName = pl.wardenLetter.name;
+      pl.wardenLetterName = (pl.wardenLetter as File).name;
       delete pl.wardenLetter;
     }
 
-    // booleans
     pl.formerInmate = pl.formerInmate === 'yes';
-    pl.onProbationParole = pl.onParole === 'yes';
+    (pl as Record<string, unknown>).onProbationParole = pl.onParole === 'yes';
     delete pl.onParole;
 
-    // uppercase state
     if (pl.idState) pl.idState = String(pl.idState).trim().toUpperCase();
 
     return pl;
