@@ -19,11 +19,8 @@
     "pg": "^8.16.3",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-<<<<<<< HEAD
-    "signature_pad": "^5.1.1"
-=======
+    "signature_pad": "^5.1.1",
     "supabase": "^2.47.2"
->>>>>>> origin/dev
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

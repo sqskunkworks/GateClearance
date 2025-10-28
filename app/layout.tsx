@@ -1,11 +1,4 @@
 import './globals.css';
-<<<<<<< HEAD
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="en">
-      <body>{children}</body>
-=======
 import { AuthProvider } from '@/context/AuthContext';
 
 export const metadata = {
@@ -21,7 +14,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {children}
         </AuthProvider>
       </body>
->>>>>>> origin/dev
     </html>
   );
 }
