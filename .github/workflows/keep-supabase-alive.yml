@@ -15,22 +15,29 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          echo "Starting health check..."
-          echo "URL: ${SUPABASE_URL}/rest/v1/health_check?select=count"
+          echo "Starting health check with data write..."
           
-          # Make the request (don't exit on error)
+          # Get current timestamp
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          
+          # INSERT a new row into health_check table
           HTTP_CODE=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
+            -X POST \
             -H "apikey: ${SUPABASE_ANON_KEY}" \
             -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-            "${SUPABASE_URL}/rest/v1/health_check?select=count" || echo "000")
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=representation" \
+            -d "{\"created_at\": \"${TIMESTAMP}\"}" \
+            "${SUPABASE_URL}/rest/v1/health_check" || echo "000")
           
           echo "HTTP Response Code: $HTTP_CODE"
           echo "Response body:"
           cat /tmp/response.txt || echo "No response file"
           echo ""
           
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "✓ Successfully pinged Supabase database at: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          if [ "$HTTP_CODE" = "201" ]; then
+            echo "✓ Successfully wrote to Supabase database at: ${TIMESTAMP}"
+            echo "Database activity registered with INSERT operation"
             exit 0
           else
             echo "✗ Error: Received HTTP $HTTP_CODE"
