@@ -54,13 +54,31 @@ const positions = {
 function formatPhoneSegments(phone?: string): { area: string; prefix: string; line: string } | null {
   if (!phone) return null;
   const digits = phone.replace(/\D/g, '');
+  
+  console.log('  Digits extracted:', digits);
+  console.log('  Digit count:', digits.length);
+  
+  // Handle 11-digit numbers (with country code 1)
+  if (digits.length === 11 && digits.startsWith('1')) {
+    console.log('  → Detected 11-digit number with country code');
+    return {
+      area: digits.slice(1, 4),    // Skip the '1', take next 3
+      prefix: digits.slice(4, 7),
+      line: digits.slice(7)
+    };
+  }
+  
+  // Handle 10-digit numbers
   if (digits.length === 10) {
+    console.log('  → Detected 10-digit number');
     return {
       area: digits.slice(0, 3),
       prefix: digits.slice(3, 6),
       line: digits.slice(6)
     };
   }
+  
+  console.log('  ⚠️ Unexpected phone format - length:', digits.length);
   return null;
 }
 
@@ -139,12 +157,20 @@ export async function fill2311(doc: PDFDocument, data: AppRecord) {
   
   if (phoneSegments) {
     try {
-      form.getTextField('Contact Number1').setText(phoneSegments.area);
-      form.getTextField('Contact Number2').setText(phoneSegments.prefix + phoneSegments.line);
+      const areaCodeValue = phoneSegments.area;
+      const restValue = phoneSegments.prefix + phoneSegments.line;
+      
+      console.log('  → Setting Contact Number1 (area code):', areaCodeValue);
+      form.getTextField('Contact Number1').setText(areaCodeValue);
+      
+      console.log('  → Setting Contact Number2 (rest):', restValue);
+      form.getTextField('Contact Number2').setText(restValue);
+      
       console.log('✅ Phone fields filled successfully:', 
-        phoneSegments.area, '-', phoneSegments.prefix + phoneSegments.line);
+        areaCodeValue, '-', restValue);
     } catch (e) {
       console.log('❌ Could not fill phone fields:', e);
+      console.log('   Error details:', e instanceof Error ? e.message : String(e));
     }
   } else {
     console.log('⚠️ Phone segments could not be parsed - skipping phone fields');
