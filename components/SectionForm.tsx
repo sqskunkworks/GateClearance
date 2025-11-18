@@ -15,7 +15,7 @@ export type FieldBase = {
   helpText?: string;
   placeholder?: string;
   span?: 1 | 2;
-  showIf?: (values: Record<string, unknown>) => boolean;
+  showIf?: (values: Record<string, any>) => boolean;
 };
 
 export type RadioOption = { label: string; value: string };
@@ -40,8 +40,8 @@ export type SectionConfig = {
   subtitle?: string;
   icon?: React.ReactNode;
   fields: Field[];
-  validate?: (values: Record<string, unknown>) => Record<string, string>;
-  buildPayload?: (values: Record<string, unknown>) => Record<string, unknown>;
+  validate?: (values: Record<string, any>) => Record<string, string>;
+  buildPayload?: (values: Record<string, any>) => Record<string, any>;
   apiPath?: (applicationId?: string) => string;
   ctaLabel?: string;
   columns?: 1 | 2;
@@ -50,9 +50,9 @@ export type SectionConfig = {
 export type SectionFormProps = {
   applicationId?: string;
   config: SectionConfig;
-  initialValues?: Record<string, unknown>;
+  initialValues?: Record<string, any>;
   clearOnSuccess?: boolean;
-  onSubmit?: (values: Record<string, unknown>) => Promise<void> | void;
+  onSubmit?: (values: Record<string, any>) => Promise<void> | void;
 };
 
 /* ======= UI bits ======= */
@@ -231,7 +231,7 @@ export function SectionForm({
   clearOnSuccess,
   onSubmit,
 }: SectionFormProps) {
-  const [values, setValues] = useState<Record<string, unknown>>(initialValues || {});
+  const [values, setValues] = useState<Record<string, any>>(initialValues || {});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [appId] = useState(applicationId);
@@ -502,13 +502,6 @@ export function SectionForm({
    Ready-made configs (unchanged content)
    ============================ */
 
-// (keep your existing rulesConfig, personalConfig, contactOrgConfig, experienceConfig, securityConfig here — unchanged)
-
-
-/* ==========
-   Ready-made configs (same content, strict typing)
-   ========== */
-
 // 1) Rules & Acknowledgment
 export const rulesConfig: SectionConfig = {
   title: 'Review & Acknowledgment',
@@ -725,7 +718,7 @@ export const experienceConfig: SectionConfig = {
   buildPayload: (v) => v,
 };
 
-// 5) Security Clearance Information
+// 5) Security Clearance Information (WITH DOUBLE-ENTRY CONFIRM FIELDS)
 export const securityConfig: SectionConfig = {
   title: 'Security Clearance Information',
   subtitle: 'Provide the ID details used for CDCR clearance.',
@@ -748,6 +741,14 @@ export const securityConfig: SectionConfig = {
       label: 'Government ID Number (DL or Passport)',
       required: true,
       placeholder: 'D1234567 or 123456789',
+    },
+    // ✅ NEW: confirm Government ID
+    {
+      kind: 'text',
+      name: 'governmentIdNumberConfirm',
+      label: 'Confirm Government ID Number',
+      required: true,
+      placeholder: 'Re-enter to confirm',
     },
     {
       kind: 'text',
@@ -784,6 +785,15 @@ export const securityConfig: SectionConfig = {
       showIf: (v) => v.ssnMethod === 'direct',
       helpText: 'Format: 123-45-6789 or 123456789',
     },
+    // ✅ NEW: confirm SSN (direct)
+    {
+      kind: 'text',
+      name: 'ssnFullConfirm',
+      label: 'Confirm your full SSN',
+      placeholder: '123-45-6789',
+      required: true,
+      showIf: (v) => v.ssnMethod === 'direct',
+    },
     {
       kind: 'text',
       name: 'ssnFirstFive',
@@ -792,6 +802,15 @@ export const securityConfig: SectionConfig = {
       required: true,
       showIf: (v) => v.ssnMethod === 'split',
       helpText: 'Send the remaining four digits via text/email/voice.',
+    },
+    // ✅ NEW: confirm SSN first 5 (split)
+    {
+      kind: 'text',
+      name: 'ssnFirstFiveConfirm',
+      label: 'Confirm the first five digits of your SSN',
+      placeholder: '12345',
+      required: true,
+      showIf: (v) => v.ssnMethod === 'split',
     },
     {
       kind: 'radio',
@@ -874,11 +893,39 @@ export const securityConfig: SectionConfig = {
       e.wardenLetter = 'Please upload your letter to the Warden';
     }
 
+    // --- Double-entry validation additions ---
+    // Government ID confirm (normalize both before comparing)
+    if (typeof v.governmentIdNumber === 'string' && typeof v.governmentIdNumberConfirm === 'string') {
+      const primary = normalizeGovId(v.governmentIdNumber);
+      const confirm = normalizeGovId(v.governmentIdNumberConfirm);
+      if (primary && confirm && primary !== confirm) {
+        e.governmentIdNumberConfirm = 'The confirmation number does not match';
+      }
+    }
+
+    // SSN (direct): compare digits-only 9-digit strings
+    if (v.ssnMethod === 'direct') {
+      const a = onlyDigits(String(v.ssnFull ?? ''));
+      const b = onlyDigits(String(v.ssnFullConfirm ?? ''));
+      if (a && b && a !== b) {
+        e.ssnFullConfirm = 'The confirmation number does not match';
+      }
+    }
+
+    // SSN (split): compare first 5 digits
+    if (v.ssnMethod === 'split') {
+      const a5 = onlyDigits(String(v.ssnFirstFive ?? ''));
+      const b5 = onlyDigits(String(v.ssnFirstFiveConfirm ?? ''));
+      if (a5 && b5 && a5 !== b5) {
+        e.ssnFirstFiveConfirm = 'The confirmation number does not match';
+      }
+    }
+
     return e;
   },
 
   buildPayload: (v) => {
-    const pl: Record<string, unknown> = { ...v };
+    const pl: Record<string, any> = { ...v };
 
     const gov = validateGovId(pl.governmentIdType as string | undefined, pl.governmentIdNumber as string | undefined);
     if (gov.ok) pl.governmentIdNumber = gov.normalized;
@@ -892,10 +939,15 @@ export const securityConfig: SectionConfig = {
     }
 
     pl.formerInmate = pl.formerInmate === 'yes';
-    (pl as Record<string, unknown>).onProbationParole = pl.onParole === 'yes';
+    (pl as Record<string, any>).onProbationParole = pl.onParole === 'yes';
     delete pl.onParole;
 
     if (pl.idState) pl.idState = String(pl.idState).trim().toUpperCase();
+
+    // --- Drop confirmation fields; only send canonical values ---
+    delete pl.governmentIdNumberConfirm;
+    delete pl.ssnFullConfirm;
+    delete pl.ssnFirstFiveConfirm;
 
     return pl;
   },
