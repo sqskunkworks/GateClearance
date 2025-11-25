@@ -1,15 +1,28 @@
 'use client';
 
 import { useState } from 'react';
+import { User } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/client';
+import { useRouter } from 'next/navigation';
+import { LogOut } from 'lucide-react';
 import { SectionForm, personalConfig, contactOrgConfig, securityConfig } from '@/components/SectionForm';
-import { LogoutButton } from '@/components/LogoutButton';
 
-const TEST_APP_ID = '591948a0-7354-4ca6-93ec-90654ed2f15e';
+type TestApplicationClientProps = {
+  user: User;
+};
 
-export default function TestApplicationPage() {
+export default function TestApplicationClient({ user }: TestApplicationClientProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [submissionComplete, setSubmissionComplete] = useState(false);
   const [formData, setFormData] = useState<Record<string, any>>({});
+  const router = useRouter();
+  const supabase = createClient();
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/auth/login');
+    router.refresh();
+  };
 
   const handleStepComplete = async (payload: any) => {
     console.log('📝 Section data received:', payload);
@@ -30,7 +43,8 @@ export default function TestApplicationPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          applicationId: TEST_APP_ID,
+          userId: user.id,           // ← FROM AUTH
+          email: user.email,          // ← FROM AUTH
           ...updatedFormData,
         }),
       });
@@ -51,13 +65,30 @@ export default function TestApplicationPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Header with Auth Info & Progress */}
       <div className="bg-white border-b shadow-sm sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 py-4">
+          {/* Top Bar: Title + User Info + Logout */}
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-bold">Gate Clearance Application</h1>
-            <LogoutButton />
+            <h1 className="text-2xl font-bold">Test Application Form</h1>
+            
+            {/* User Info & Logout Button */}
+            <div className="flex items-center gap-3">
+              <div className="text-sm">
+                <span className="text-gray-600">Signed in as </span>
+                <span className="font-medium text-black">{user.email}</span>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 hover:text-black border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                Logout
+              </button>
+            </div>
           </div>
           
+          {/* Progress Stepper */}
           <div className="relative">
             <div className="flex items-start justify-between">
               {[
@@ -81,6 +112,7 @@ export default function TestApplicationPage() {
               ))}
             </div>
             
+            {/* Progress Line */}
             <div className="absolute top-5 left-0 right-0 flex items-center px-[16.66%]">
               <div className="flex-1 flex items-center gap-0">
                 <div className={`h-1 flex-1 ${currentStep >= 2 ? 'bg-black' : 'bg-gray-200'}`} />
@@ -91,6 +123,7 @@ export default function TestApplicationPage() {
         </div>
       </div>
 
+      {/* Form Steps */}
       {!submissionComplete ? (
         <>
           {currentStep === 1 && (
@@ -116,6 +149,7 @@ export default function TestApplicationPage() {
           )}
         </>
       ) : (
+        /* Success Screen */
         <div className="max-w-3xl mx-auto px-4 py-12">
           <div className="bg-white rounded-2xl border border-gray-200 p-8 text-center shadow-sm">
             {/* Success Icon */}
@@ -127,22 +161,29 @@ export default function TestApplicationPage() {
             
             {/* Success Message */}
             <h2 className="text-3xl font-bold mb-3">Application Submitted!</h2>
-            <p className="text-gray-600 text-lg mb-8">
+            <p className="text-gray-600 text-lg mb-6">
               Thank you for submitting your application. We have received your information and will process it shortly.
             </p>
+          
+            {/* User Info Box */}
+            <div className="bg-gray-50 rounded-lg p-4 mb-6 text-left">
+              <p className="text-sm text-gray-600 mb-1">Submitted by:</p>
+              <p className="font-medium text-black">{user.email}</p>
+              {user.user_metadata?.full_name && (
+                <p className="text-sm text-gray-600 mt-1">{user.user_metadata.full_name}</p>
+              )}
+            </div>
             
-            {/* Optional: Additional Info */}
-            
-            {/* Start Over Button */}
+            {/* Action Buttons */}
             <button
               onClick={() => {
                 setCurrentStep(1);
                 setSubmissionComplete(false);
                 setFormData({});
               }}
-              className="text-sm text-gray-600 hover:text-black transition-colors"
+              className="w-full py-3 px-4 bg-black text-white rounded-xl font-semibold hover:bg-gray-800 transition-colors"
             >
-              ← Submit Another Application
+              Submit Another Application
             </button>
           </div>
         </div>

@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@supabase/ssr": "^0.7.0",
-    "@supabase/supabase-js": "^2.57.4",
+    "@supabase/supabase-js": "^2.81.1",
     "drizzle-orm": "^0.44.5",
     "framer-motion": "^12.23.18",
     "googleapis": "^164.1.0",

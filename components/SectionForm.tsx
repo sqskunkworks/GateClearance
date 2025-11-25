@@ -742,7 +742,7 @@ export const securityConfig: SectionConfig = {
       required: true,
       placeholder: 'D1234567 or 123456789',
     },
-    // ✅ NEW: confirm Government ID
+
     {
       kind: 'text',
       name: 'governmentIdNumberConfirm',
@@ -785,7 +785,7 @@ export const securityConfig: SectionConfig = {
       showIf: (v) => v.ssnMethod === 'direct',
       helpText: 'Format: 123-45-6789 or 123456789',
     },
-    // ✅ NEW: confirm SSN (direct)
+
     {
       kind: 'text',
       name: 'ssnFullConfirm',
@@ -803,7 +803,7 @@ export const securityConfig: SectionConfig = {
       showIf: (v) => v.ssnMethod === 'split',
       helpText: 'Send the remaining four digits via text/email/voice.',
     },
-    // ✅ NEW: confirm SSN first 5 (split)
+   
     {
       kind: 'text',
       name: 'ssnFirstFiveConfirm',

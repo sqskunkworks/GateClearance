@@ -15,7 +15,6 @@ const supabase = createClient(
 
 const ADMIN_SECRET = process.env.ADMIN_DOWNLOAD_SECRET!;
 
-// ✅ Changed from GET to POST
 export async function POST(req: Request) {
   try {
     console.log('=== PDF Generation Request Started ===');
@@ -32,8 +31,6 @@ export async function POST(req: Request) {
       console.error('❌ Unauthorized access attempt');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    // ✅ Parse request body instead of query params
     const body = await req.json();
     const { applicationId, ssn_full, ...extraFields } = body;
 
@@ -71,7 +68,7 @@ export async function POST(req: Request) {
       return `${month}-${day}-${year}`;
     };
 
-    // ✅ Merge DB data + frontend-passed data
+
     const record: AppRecord = {
       // From DB
       first_name: data.first_name,
@@ -95,7 +92,6 @@ export async function POST(req: Request) {
       on_probation_parole: data.on_probation_parole ?? false,
       pending_charges: data.pending_charges ?? false,
       
-      // ✅ From frontend (not in DB)
       ssn_full: ssn_full || undefined,
     };
 
