@@ -1,158 +1,229 @@
+// app/api/applications/submit/route.ts
 import { NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { loadBlank2311, fill2311, type AppRecord } from '@/lib/pdf2311';
 import { uploadPDFToDrive } from '@/lib/googleDrive';
-import { createClient } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
 
+// ✅ Server-only Supabase client (PR feedback addressed)
 const supabase = createSupabaseClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   { auth: { persistSession: false, autoRefreshToken: false } }
 );
 
 export async function POST(req: Request) {
   try {
-    console.log('\n🔐 Checking authentication...');
+    console.log('=== APPLICATION SUBMIT STARTED ===');
     
-    // Get authenticated user
+    // Authenticate user
     const authSupabase = await createClient();
     const { data: { user }, error: authError } = await authSupabase.auth.getUser();
     
     if (authError || !user) {
-      console.error('❌ Unauthorized access attempt');
+      console.error('❌ Auth error:', authError);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    
+
     console.log('✅ User authenticated:', user.email);
 
     const body = await req.json();
-    const { applicationId, ssn_full, ...formData } = body;
+    console.log('📥 Request body keys:', Object.keys(body));
 
-    console.log('📦 Processing application submission...');
+    // Validate required fields
+    const requiredFields = [
+      'applicationId',
+      'firstName',
+      'lastName',
+      'dateOfBirth',
+      'gender',
+      'email',
+      'phoneNumber',
+      'companyOrOrganization',
+      'governmentIdType',
+      'governmentIdNumber',
+      'digitalSignature',
+    ];
 
-    // Format date helper
-    const formatDate = (dateStr: string | null) => {
+    const missingFields = requiredFields.filter(field => !body[field]);
+
+    // Check SSN if direct submission
+    if (body.submissionType === 'direct' && !body.ssn) {
+      missingFields.push('ssn (required for direct submission)');
+    }
+
+    if (missingFields.length > 0) {
+      console.error('❌ Missing fields:', missingFields);
+      return NextResponse.json(
+        { error: `Missing required fields: ${missingFields.join(', ')}` },
+        { status: 400 }
+      );
+    }
+
+    // ========================================
+    // SAVE TO DATABASE
+    // ========================================
+    console.log('💾 Saving to database...');
+
+    // ✅ Using snake_case for applications table (Drizzle default naming)
+    const applicationData = {
+      id: body.applicationId,
+      user_id: user.id,
+      
+      // Personal info
+      email: body.email,
+      first_name: body.firstName,
+      last_name: body.lastName,
+      other_names: body.otherNames || null,
+      date_of_birth: body.dateOfBirth,
+      gender: body.gender,
+      
+      // Contact info
+      phone_number: body.phoneNumber,
+      company_or_organization: body.companyOrOrganization,
+      purpose_of_visit: body.purposeOfVisit || null,
+      
+      // Government ID
+      government_id_type: body.governmentIdType,
+      government_id_number: body.governmentIdNumber,
+      id_state: body.idState || null,
+      id_expiration: body.idExpiration || null,
+      
+      // Background questions
+      visited_inmate: body.visitedInmate === 'yes',
+      former_inmate: body.formerInmate === 'yes',
+      restricted_access: body.restrictedAccess === 'yes',
+      felony_conviction: body.felonyConviction === 'yes',
+      on_probation_parole: body.onProbationParole === 'yes',
+      pending_charges: body.pendingCharges === 'yes',
+      
+      // Signature
+      digital_signature: body.digitalSignature,
+      
+      // System fields
+      authorization_type: 'gate_clearance',
+      status: 'submitted',
+      submitted_at: new Date().toISOString(),
+    };
+
+    const { data: savedApp, error: saveError } = await supabase
+      .from('applications')
+      .upsert(applicationData, { onConflict: 'id' })
+      .select()
+      .single();
+
+    if (saveError) {
+      console.error('❌ Database error:', saveError);
+      return NextResponse.json(
+        { error: `Database error: ${saveError.message}` },
+        { status: 500 }
+      );
+    }
+
+    console.log('✅ Saved to database');
+
+    // ========================================
+    // GENERATE PDF
+    // ========================================
+    console.log('📄 Generating PDF...');
+
+    const formatDate = (dateStr: string | null | undefined) => {
       if (!dateStr) return '';
       if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) return dateStr;
       const [year, month, day] = dateStr.split('-');
       return `${month}-${day}-${year}`;
     };
 
-    // Prepare application data
-   // Prepare application data
-const applicationData = {
-  id: applicationId,
-  user_id: user.id,
-  email: formData.email || user.email,
-  first_name: formData.firstName,
-  last_name: formData.lastName,
-  other_names: formData.otherNames,
-  date_of_birth: formatDate(formData.dateOfBirth),
-  phone_number: formData.phoneNumber,
-  company_or_organization: formData.companyOrOrganization,
-  purpose_of_visit: formData.purposeOfVisit,
-  gender: formData.gender,
-  government_id_type: formData.governmentIdType,
-  government_id_number: formData.governmentIdNumber,
-  id_state: formData.idState,
-  id_expiration: formatDate(formData.idExpiration),
-  digital_signature: formData.digitalSignature,
-  visited_inmate: formData.visitedInmate === 'yes',
-  former_inmate: formData.formerInmate === 'yes',
-  restricted_access: formData.restrictedAccess === 'yes',
-  felony_conviction: formData.felonyConviction === 'yes',
-  on_probation_parole: formData.onProbationParole === 'yes',
-  pending_charges: formData.pendingCharges === 'yes',
-  authorization_type: 'gate_clearance',
-  status: 'submitted',
-  submitted_at: new Date().toISOString(),
-};
-
-    console.log('💾 Saving to database...');
-    const { data, error } = await supabase
-      .from('applications')
-      .upsert(applicationData, { onConflict: 'id' })
-      .select()
-      .single();
-
-    if (error) {
-      console.error('❌ Database error:', error);
-      throw new Error(`Database error: ${error.message}`);
-    }
-
-    console.log('✅ Application saved to database');
-
-    // Prepare data for PDF
-    const record: AppRecord = {
-      first_name: data.first_name,
-      last_name: data.last_name,
-      other_names: data.other_names,
-      date_of_birth: data.date_of_birth,
-      phone_number: data.phone_number,
-      email: data.email,
-      company: data.company_or_organization,
-      purpose_of_visit: data.purpose_of_visit,
-      gender: data.gender,
-      gov_id_type: data.government_id_type,
-      gov_id_number: data.government_id_number,
-      id_state: data.id_state ?? '',
-      id_expiration: data.id_expiration,
-      signature_data_url: data.digital_signature ?? '',
-      visited_inmate: data.visited_inmate ?? false,
-      former_inmate: data.former_inmate ?? false,
-      restricted_access: data.restricted_access ?? false,
-      felony_conviction: data.felony_conviction ?? false,
-      on_probation_parole: data.on_probation_parole ?? false,
-      pending_charges: data.pending_charges ?? false,
-      ssn_full: ssn_full || undefined,
+    const pdfRecord: AppRecord = {
+      first_name: body.firstName,
+      last_name: body.lastName,
+      other_names: body.otherNames || '',
+      date_of_birth: formatDate(body.dateOfBirth),
+      phone_number: body.phoneNumber,
+      email: body.email,
+      company: body.companyOrOrganization,
+      purpose_of_visit: body.purposeOfVisit || '',
+      gender: body.gender,
+      gov_id_type: body.governmentIdType,
+      gov_id_number: body.governmentIdNumber,
+      id_state: body.idState || '',
+      id_expiration: formatDate(body.idExpiration),
+      signature_data_url: body.digitalSignature,
+      visited_inmate: body.visitedInmate === 'yes',
+      former_inmate: body.formerInmate === 'yes',
+      restricted_access: body.restrictedAccess === 'yes',
+      felony_conviction: body.felonyConviction === 'yes',
+      on_probation_parole: body.onProbationParole === 'yes',
+      pending_charges: body.pendingCharges === 'yes',
+      ssn_full: body.ssn,
     };
 
-    console.log('📄 Generating PDF...');
-    const pdf = await loadBlank2311();
-    await fill2311(pdf, record);
-    const pdfBytes = await pdf.save();
+    const pdfDoc = await loadBlank2311();
+    await fill2311(pdfDoc, pdfRecord);
+    const pdfBytes = await pdfDoc.save();
+
     console.log('✅ PDF generated, size:', pdfBytes.length, 'bytes');
 
-    const filename = `CDCR_2311_${data.first_name}_${data.last_name}_${applicationId}.pdf`;
+    // ========================================
+    // UPLOAD TO GOOGLE DRIVE
+    // ========================================
+    console.log('📤 Uploading to Google Drive...');
 
-    console.log('📤 Uploading PDF to Google Drive...');
-    const { fileId, webViewLink } = await uploadPDFToDrive(
+    const filename = `CDCR_2311_${body.firstName}_${body.lastName}_${body.applicationId}.pdf`;
+    
+    // ✅ FIX: Destructure the return value
+    const { fileId } = await uploadPDFToDrive(
       Buffer.from(pdfBytes),
       filename
     );
-    console.log('✅ PDF uploaded to Drive');
 
+    console.log('✅ Uploaded to Drive, File ID:', fileId);
+
+    // ========================================
+    // SAVE DOCUMENT METADATA
+    // ========================================
     console.log('💾 Saving document metadata...');
+
+    // ✅ CRITICAL: Using snake_case column names to match Drizzle schema
+    // Your schema uses: applicationId, url, filename, mimeType, sizeBytes, uploadedByUserId
+    // But Drizzle converts these to snake_case in Postgres: application_id, mime_type, etc.
     const { error: docError } = await supabase
       .from('documents')
       .insert({
-        application_id: applicationId,
-        url: webViewLink,
-        filename: filename,
-        mime_type: 'application/pdf',
-        size_bytes: pdfBytes.length,
+        application_id: body.applicationId,     // ✅ snake_case (Drizzle default)
+        url: ` `,                 
+        filename: filename,                      // ✅ Already snake_case
+        mime_type: 'application/pdf',           // ✅ snake_case
+        size_bytes: pdfBytes.length,            // ✅ snake_case
+        uploaded_by_user_id: user.id,           // ✅ snake_case
       });
 
     if (docError) {
-      console.error('⚠️  Error saving document metadata:', docError);
+      console.error('⚠️ Document metadata error:', docError);
+      // ✅ Don't fail the whole request - PDF is already uploaded
     } else {
       console.log('✅ Document metadata saved');
     }
 
-    console.log('✅✅✅ Application submission complete!\n');
+    console.log('✅✅✅ APPLICATION SUBMISSION COMPLETE');
 
+    // ✅ PR Feedback: No webViewLink in response
     return NextResponse.json({
       success: true,
-      applicationId: applicationId,
-      driveFileUrl: webViewLink,
+      applicationId: body.applicationId,
+      message: 'Application submitted successfully',
     });
+
   } catch (error) {
-    console.error('❌ Error in submit route:', error);
+    console.error('❌❌❌ FATAL ERROR:', error);
+    console.error('Stack:', error instanceof Error ? error.stack : 'No stack');
+    
     return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : 'Failed to submit application',
+      { 
+        error: 'Failed to submit application',
+        details: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }
     );

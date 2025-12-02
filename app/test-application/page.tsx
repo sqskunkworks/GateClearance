@@ -1,71 +1,201 @@
+// ============================================
+// FILE 4: app/test-application/page.tsx
+// ============================================
 'use client';
 
-import { useState } from 'react';
-import { SectionForm, personalConfig, contactOrgConfig, securityConfig } from '@/components/SectionForm';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { SectionForm } from '@/components/SectionForm';
 import { LogoutButton } from '@/components/LogoutButton';
-
-const TEST_APP_ID = '591948a0-7354-4ca6-93ec-90654ed2f15e';
+import {
+  personalConfig,
+  contactOrgConfig,
+  experienceConfig,
+  rulesConfig,
+  securityConfig,
+} from '@/lib/stepConfigs';
+import { validateFullApplication } from '@/lib/validation/applicationSchema';
 
 export default function TestApplicationPage() {
+  const [applicationId] = useState(() => crypto.randomUUID());
   const [currentStep, setCurrentStep] = useState(1);
-  const [submissionComplete, setSubmissionComplete] = useState(false);
   const [formData, setFormData] = useState<Record<string, any>>({});
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const router = useRouter();
+
+  // Load existing draft on mount
+  useEffect(() => {
+    loadDraft();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-save draft every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (Object.keys(formData).length > 0) {
+        saveDraft(formData);
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData]);
+
+  const loadDraft = async () => {
+    try {
+      const response = await fetch(`/api/applications/draft?id=${applicationId}`);
+      if (response.ok) {
+        const { draft } = await response.json();
+        if (draft && draft.status === 'draft') {
+          const loadedData = {
+            firstName: draft.first_name,
+            lastName: draft.last_name,
+            otherNames: draft.other_names,
+            dateOfBirth: draft.date_of_birth,
+            gender: draft.gender,
+            phoneNumber: draft.phone_number,
+            email: draft.email,
+            companyOrOrganization: draft.company_or_organization,
+            purposeOfVisit: draft.purpose_of_visit,
+            governmentIdType: draft.government_id_type,
+            governmentIdNumber: draft.government_id_number,
+            idState: draft.id_state,
+            idExpiration: draft.id_expiration,
+            digitalSignature: draft.digital_signature,
+            visitedInmate: draft.visited_inmate ? 'yes' : 'no',
+            formerInmate: draft.former_inmate ? 'yes' : 'no',
+            restrictedAccess: draft.restricted_access ? 'yes' : 'no',
+            felonyConviction: draft.felony_conviction ? 'yes' : 'no',
+            onProbationParole: draft.on_probation_parole ? 'yes' : 'no',
+            pendingCharges: draft.pending_charges ? 'yes' : 'no',
+          };
+          setFormData(loadedData);
+          console.log('✅ Draft loaded');
+        }
+      }
+    } catch (error) {
+      console.log('No existing draft found');
+    }
+  };
+
+  const saveDraft = async (data: Record<string, any>) => {
+    setIsSavingDraft(true);
+    try {
+      await fetch('/api/applications/draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          applicationId,
+          ...data,
+        }),
+      });
+      setLastSaved(new Date());
+      console.log('💾 Draft saved');
+    } catch (error) {
+      console.error('Failed to save draft:', error);
+    } finally {
+      setIsSavingDraft(false);
+    }
+  };
 
   const handleStepComplete = async (payload: any) => {
-    console.log('📝 Section data received:', payload);
-    
     const updatedFormData = { ...formData, ...payload };
     setFormData(updatedFormData);
-    console.log('📦 Accumulated form data:', updatedFormData);
     
-    if (currentStep < 3) {
+    await saveDraft(updatedFormData);
+    
+    if (currentStep < 5) {
       setCurrentStep(currentStep + 1);
       return;
     }
     
-    try {
-      console.log('💾 Final step reached - saving everything and uploading PDF...');
+    // ✅ FINAL SUBMISSION: Full schema validation
+    console.log('→ Running full application validation...');
+    const fullData = { applicationId, ...updatedFormData };
+    const validationResult = validateFullApplication(fullData);
+    
+    if (!validationResult.success) {
+      console.error('❌ Final validation failed:', validationResult.error.issues);
+      const firstError = validationResult.error.issues[0];
+      alert(`Validation error: ${firstError.message} (field: ${firstError.path.join('.')})`);
       
+      const errorField = String(firstError.path[0]);
+      const errorStep = getStepForField(errorField);
+      if (errorStep !== currentStep) {
+        setCurrentStep(errorStep);
+      }
+      return;
+    }
+    
+    console.log('✅ Full validation passed');
+    
+    try {
       const response = await fetch('/api/applications/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          applicationId: TEST_APP_ID,
-          ...updatedFormData,
-        }),
+        body: JSON.stringify(fullData),
       });
 
       const result = await response.json();
-      console.log('✅ Server response:', result);
 
       if (!response.ok) {
         throw new Error(result.error || 'Failed to save application');
       }
       
-      setSubmissionComplete(true);
+      router.push(`/application/success?id=${applicationId}`);
     } catch (error) {
       console.error('❌ Submit error:', error);
       alert(`Failed to save: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
+  // Helper to determine which step a field belongs to
+  const getStepForField = (fieldName: string): number => {
+    const stepFields = [
+      personalConfig.fields.map((f: any) => f.name),
+      contactOrgConfig.fields.map((f: any) => f.name),
+      experienceConfig.fields.map((f: any) => f.name),
+      rulesConfig.fields.map((f: any) => f.name),
+      securityConfig.fields.map((f: any) => f.name),
+    ];
+    
+    for (let i = 0; i < stepFields.length; i++) {
+      if (stepFields[i].includes(fieldName)) {
+        return i + 1;
+      }
+    }
+    return 1;
+  };
+
+  const steps = [
+    { num: 1, label: 'Personal', config: personalConfig },
+    { num: 2, label: 'Contact', config: contactOrgConfig },
+    { num: 3, label: 'Experience', config: experienceConfig },
+    { num: 4, label: 'Rules', config: rulesConfig },
+    { num: 5, label: 'Security', config: securityConfig },
+  ];
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b shadow-sm sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-bold">Gate Clearance Application</h1>
+            <div>
+              <h1 className="text-2xl font-bold">Gate Clearance Application</h1>
+              {lastSaved && (
+                <p className="text-xs text-gray-500 mt-1">
+                  {isSavingDraft ? 'Saving...' : `Last saved ${lastSaved.toLocaleTimeString()}`}
+                </p>
+              )}
+            </div>
             <LogoutButton />
           </div>
           
           <div className="relative">
             <div className="flex items-start justify-between">
-              {[
-                { num: 1, label: 'Personal Info' },
-                { num: 2, label: 'Contact' },
-                { num: 3, label: 'Security' },
-              ].map((step) => (
-                <div key={step.num} className="flex flex-col items-center" style={{ width: '33.33%' }}>
+              {steps.map((step) => (
+                <div key={step.num} className="flex flex-col items-center" style={{ width: `${100 / steps.length}%` }}>
                   <div
                     className={`flex items-center justify-center w-10 h-10 rounded-full font-semibold mb-2 relative z-10 ${
                       step.num <= currentStep ? 'bg-black text-white' : 'bg-gray-200 text-gray-500'
@@ -81,72 +211,30 @@ export default function TestApplicationPage() {
               ))}
             </div>
             
-            <div className="absolute top-5 left-0 right-0 flex items-center px-[16.66%]">
+            <div className="absolute top-5 left-0 right-0 flex items-center px-[10%]">
               <div className="flex-1 flex items-center gap-0">
-                <div className={`h-1 flex-1 ${currentStep >= 2 ? 'bg-black' : 'bg-gray-200'}`} />
-                <div className={`h-1 flex-1 ${currentStep >= 3 ? 'bg-black' : 'bg-gray-200'}`} />
+                {steps.slice(0, -1).map((_, idx) => (
+                  <div
+                    key={idx}
+                    className={`h-1 flex-1 ${currentStep > idx + 1 ? 'bg-black' : 'bg-gray-200'}`}
+                  />
+                ))}
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {!submissionComplete ? (
-        <>
-          {currentStep === 1 && (
-            <SectionForm 
-              config={personalConfig} 
-              initialValues={formData} 
-              onSubmit={handleStepComplete} 
-            />
-          )}
-          {currentStep === 2 && (
-            <SectionForm 
-              config={contactOrgConfig} 
-              initialValues={formData} 
-              onSubmit={handleStepComplete} 
-            />
-          )}
-          {currentStep === 3 && (
-            <SectionForm 
-              config={securityConfig} 
-              initialValues={formData} 
-              onSubmit={handleStepComplete} 
-            />
-          )}
-        </>
-      ) : (
-        <div className="max-w-3xl mx-auto px-4 py-12">
-          <div className="bg-white rounded-2xl border border-gray-200 p-8 text-center shadow-sm">
-            {/* Success Icon */}
-            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <svg className="w-10 h-10 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            
-            {/* Success Message */}
-            <h2 className="text-3xl font-bold mb-3">Application Submitted!</h2>
-            <p className="text-gray-600 text-lg mb-8">
-              Thank you for submitting your application. We have received your information and will process it shortly.
-            </p>
-            
-            {/* Optional: Additional Info */}
-            
-            {/* Start Over Button */}
-            <button
-              onClick={() => {
-                setCurrentStep(1);
-                setSubmissionComplete(false);
-                setFormData({});
-              }}
-              className="text-sm text-gray-600 hover:text-black transition-colors"
-            >
-              ← Submit Another Application
-            </button>
-          </div>
-        </div>
-      )}
+      {steps.map((step) => (
+        currentStep === step.num && (
+          <SectionForm
+            key={step.num}
+            config={step.config}
+            initialValues={formData}
+            onSubmit={handleStepComplete}
+          />
+        )
+      ))}
     </div>
   );
 }
