@@ -4,10 +4,16 @@ import { Readable } from 'stream';
 const SCOPES = ['https://www.googleapis.com/auth/drive.file'];
 
 function getDriveClient() {
+  // Decode base64 private key
+  const privateKey = Buffer.from(
+    process.env.GOOGLE_PRIVATE_KEY_BASE64!,
+    'base64'
+  ).toString('utf-8');
+
   const auth = new google.auth.GoogleAuth({
     credentials: {
       client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL!,
-      private_key: process.env.GOOGLE_PRIVATE_KEY!.replace(/\\n/g, '\n'),
+      private_key: privateKey,
     },
     scopes: SCOPES,
   });

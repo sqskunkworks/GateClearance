@@ -1,162 +1,230 @@
-
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+// app/api/applications/submit/route.ts
+import { NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { loadBlank2311, fill2311, type AppRecord } from '@/lib/pdf2311';
 import { uploadPDFToDrive } from '@/lib/googleDrive';
 
-const supabase = createClient(
+export const runtime = 'nodejs';
+
+// ✅ Server-only Supabase client (PR feedback addressed)
+const supabase = createSupabaseClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   { auth: { persistSession: false, autoRefreshToken: false } }
 );
 
-export async function POST(request: NextRequest) {
+export async function POST(req: Request) {
   try {
     console.log('=== APPLICATION SUBMIT STARTED ===');
-    const body = await request.json();
     
-    const { applicationId, ssnFull, ssnMethod, ssnFirstFive, wardenLetter, digitalSignature, ...formData } = body;
+    // Authenticate user
+    const authSupabase = await createClient();
+    const { data: { user }, error: authError } = await authSupabase.auth.getUser();
     
-    // Helper to convert dates
-    const convertDate = (dateStr: string | undefined) => {
-      if (!dateStr) return null;
-      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
-      if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
-        const [month, day, year] = dateStr.split('-');
-        return `${year}-${month}-${day}`;
-      }
-      return null;
-    };
+    if (authError || !user) {
+      console.error('❌ Auth error:', authError);
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-    // STEP 1: Save to database
-    console.log('→ STEP 1: Saving to database...');
+    console.log('✅ User authenticated:', user.email);
+
+    const body = await req.json();
+    console.log('📥 Request body keys:', Object.keys(body));
+
+    // Validate required fields
+    const requiredFields = [
+      'applicationId',
+      'firstName',
+      'lastName',
+      'dateOfBirth',
+      'gender',
+      'email',
+      'phoneNumber',
+      'companyOrOrganization',
+      'governmentIdType',
+      'governmentIdNumber',
+      'digitalSignature',
+    ];
+
+    const missingFields = requiredFields.filter(field => !body[field]);
+
+    // Check SSN if direct submission
+    if (body.submissionType === 'direct' && !body.ssn) {
+      missingFields.push('ssn (required for direct submission)');
+    }
+
+    if (missingFields.length > 0) {
+      console.error('❌ Missing fields:', missingFields);
+      return NextResponse.json(
+        { error: `Missing required fields: ${missingFields.join(', ')}` },
+        { status: 400 }
+      );
+    }
+
+    // ========================================
+    // SAVE TO DATABASE
+    // ========================================
+    console.log('💾 Saving to database...');
+
+    // ✅ Using snake_case for applications table (Drizzle default naming)
     const applicationData = {
-      id: applicationId,
-      user_id: 'test-user',
-      first_name: formData.firstName,
-      last_name: formData.lastName,
-      other_names: formData.otherNames,
-      date_of_birth: convertDate(formData.dateOfBirth),
-      gender: formData.gender,
-      email: formData.email,
-      phone_number: formData.phoneNumber,
-      company_or_organization: formData.companyOrOrganization,
-      purpose_of_visit: formData.purposeOfVisit,
-      government_id_type: formData.governmentIdType,
-      government_id_number: formData.governmentIdNumber,
-      id_state: formData.idState,
-      id_expiration: convertDate(formData.idExpiration),
-      digital_signature: digitalSignature,
-      former_inmate: formData.formerInmate === 'yes',
-      on_probation_parole: formData.onParole === 'yes',
-      visited_inmate: formData.visitedInmate === 'yes',
-      restricted_access: formData.restrictedAccess === 'yes',
-      felony_conviction: formData.felonyConviction === 'yes',
-      pending_charges: formData.pendingCharges === 'yes',
-      authorization_type: 'Gate Clearance',
+      id: body.applicationId,
+      user_id: user.id,
+      
+      // Personal info
+      email: body.email,
+      first_name: body.firstName,
+      last_name: body.lastName,
+      other_names: body.otherNames || null,
+      date_of_birth: body.dateOfBirth,
+      gender: body.gender,
+      
+      // Contact info
+      phone_number: body.phoneNumber,
+      company_or_organization: body.companyOrOrganization,
+      purpose_of_visit: body.purposeOfVisit || null,
+      
+      // Government ID
+      government_id_type: body.governmentIdType,
+      government_id_number: body.governmentIdNumber,
+      id_state: body.idState || null,
+      id_expiration: body.idExpiration || null,
+      
+      // Background questions
+      visited_inmate: body.visitedInmate === 'yes',
+      former_inmate: body.formerInmate === 'yes',
+      restricted_access: body.restrictedAccess === 'yes',
+      felony_conviction: body.felonyConviction === 'yes',
+      on_probation_parole: body.onProbationParole === 'yes',
+      pending_charges: body.pendingCharges === 'yes',
+      
+      // Signature
+      digital_signature: body.digitalSignature,
+      
+      // System fields
+      authorization_type: 'gate_clearance',
       status: 'submitted',
       submitted_at: new Date().toISOString(),
     };
-    
-    const { data, error } = await supabase
+
+    const { data: savedApp, error: saveError } = await supabase
       .from('applications')
       .upsert(applicationData, { onConflict: 'id' })
       .select()
       .single();
-    
-    if (error) {
-      console.error('❌ Database error:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+
+    if (saveError) {
+      console.error('❌ Database error:', saveError);
+      return NextResponse.json(
+        { error: `Database error: ${saveError.message}` },
+        { status: 500 }
+      );
     }
-    
-    console.log('✅ Saved to database:', data.id);
-    
-    // STEP 2: Generate PDF
-    console.log('→ STEP 2: Generating PDF...');
-    
-    const formatDateForPDF = (dateStr: string | null) => {
+
+    console.log('✅ Saved to database');
+
+    // ========================================
+    // GENERATE PDF
+    // ========================================
+    console.log('📄 Generating PDF...');
+
+    const formatDate = (dateStr: string | null | undefined) => {
       if (!dateStr) return '';
       if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) return dateStr;
       const [year, month, day] = dateStr.split('-');
       return `${month}-${day}-${year}`;
     };
 
-    const record: AppRecord = {
-      first_name: data.first_name,
-      last_name: data.last_name,
-      other_names: data.other_names,
-      date_of_birth: formatDateForPDF(data.date_of_birth),
-      phone_number: data.phone_number,
-      email: data.email,
-      company: data.company_or_organization,
-      purpose_of_visit: data.purpose_of_visit,
-      gender: data.gender,
-      gov_id_type: data.government_id_type,
-      gov_id_number: data.government_id_number,
-      id_state: data.id_state ?? '',
-      id_expiration: formatDateForPDF(data.id_expiration),
-      signature_data_url: data.digital_signature ?? '',
-      visited_inmate: data.visited_inmate ?? false,
-      former_inmate: data.former_inmate ?? false,
-      restricted_access: data.restricted_access ?? false,
-      felony_conviction: data.felony_conviction ?? false,
-      on_probation_parole: data.on_probation_parole ?? false,
-      pending_charges: data.pending_charges ?? false,
-      ssn_full: ssnFull,
+    const pdfRecord: AppRecord = {
+      first_name: body.firstName,
+      last_name: body.lastName,
+      other_names: body.otherNames || '',
+      date_of_birth: formatDate(body.dateOfBirth),
+      phone_number: body.phoneNumber,
+      email: body.email,
+      company: body.companyOrOrganization,
+      purpose_of_visit: body.purposeOfVisit || '',
+      gender: body.gender,
+      gov_id_type: body.governmentIdType,
+      gov_id_number: body.governmentIdNumber,
+      id_state: body.idState || '',
+      id_expiration: formatDate(body.idExpiration),
+      signature_data_url: body.digitalSignature,
+      visited_inmate: body.visitedInmate === 'yes',
+      former_inmate: body.formerInmate === 'yes',
+      restricted_access: body.restrictedAccess === 'yes',
+      felony_conviction: body.felonyConviction === 'yes',
+      on_probation_parole: body.onProbationParole === 'yes',
+      pending_charges: body.pendingCharges === 'yes',
+      ssn_full: body.ssn,
     };
 
-    const pdf = await loadBlank2311();
-    await fill2311(pdf, record);
-    const pdfBytes = await pdf.save();
-    
+    const pdfDoc = await loadBlank2311();
+    await fill2311(pdfDoc, pdfRecord);
+    const pdfBytes = await pdfDoc.save();
+
     console.log('✅ PDF generated, size:', pdfBytes.length, 'bytes');
+
+    // ========================================
+    // UPLOAD TO GOOGLE DRIVE
+    // ========================================
+    console.log('📤 Uploading to Google Drive...');
+
+    const filename = `CDCR_2311_${body.firstName}_${body.lastName}_${body.applicationId}.pdf`;
     
-    // STEP 3: Upload to Google Drive
-    console.log('→ STEP 3: Uploading to Google Drive...');
-    const filename = `CDCR_2311_${data.first_name}_${data.last_name}_${applicationId}.pdf`;
-    
-    const { fileId, webViewLink } = await uploadPDFToDrive(
-      Buffer.from(pdfBytes), 
+    // ✅ FIX: Destructure the return value
+    const { fileId } = await uploadPDFToDrive(
+      Buffer.from(pdfBytes),
       filename
     );
-    
-    console.log('✅ Uploaded to Google Drive');
-    console.log('   File ID:', fileId);
-    console.log('   URL:', webViewLink);
-    
-    // STEP 4: Save document metadata
-    console.log('→ STEP 4: Saving document metadata...');
+
+    console.log('✅ Uploaded to Drive, File ID:', fileId);
+
+    // ========================================
+    // SAVE DOCUMENT METADATA
+    // ========================================
+    console.log('💾 Saving document metadata...');
+
+    // ✅ CRITICAL: Using snake_case column names to match Drizzle schema
+    // Your schema uses: applicationId, url, filename, mimeType, sizeBytes, uploadedByUserId
+    // But Drizzle converts these to snake_case in Postgres: application_id, mime_type, etc.
     const { error: docError } = await supabase
       .from('documents')
       .insert({
-        application_id: applicationId,
-        url: webViewLink,
-        filename: filename,
-        mime_type: 'application/pdf',
-        size_bytes: pdfBytes.length,
-        uploaded_by_user_id: 'system',
+        application_id: body.applicationId,     // ✅ snake_case (Drizzle default)
+        url: ` `,                 
+        filename: filename,                      // ✅ Already snake_case
+        mime_type: 'application/pdf',           // ✅ snake_case
+        size_bytes: pdfBytes.length,            // ✅ snake_case
+        uploaded_by_user_id: user.id,           // ✅ snake_case
       });
-    
+
     if (docError) {
-      console.warn('⚠️ Warning: Failed to save document metadata:', docError.message);
+      console.error('⚠️ Document metadata error:', docError);
+      // ✅ Don't fail the whole request - PDF is already uploaded
     } else {
       console.log('✅ Document metadata saved');
     }
-    
-    console.log('=== APPLICATION SUBMIT COMPLETED ===');
-    
+
+    console.log('✅✅✅ APPLICATION SUBMISSION COMPLETE');
+
+    // ✅ PR Feedback: No webViewLink in response
     return NextResponse.json({
       success: true,
-      applicationId: data.id,
-      driveFileId: fileId,
-      driveFileUrl: webViewLink,
-      message: 'Application submitted and PDF uploaded to Google Drive',
+      applicationId: body.applicationId,
+      message: 'Application submitted successfully',
     });
+
+  } catch (error) {
+    console.error('❌❌❌ FATAL ERROR:', error);
+    console.error('Stack:', error instanceof Error ? error.stack : 'No stack');
     
-  } catch (error: any) {
-    console.error('❌ Error in submit route:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to save application' },
+      { 
+        error: 'Failed to submit application',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     );
   }
