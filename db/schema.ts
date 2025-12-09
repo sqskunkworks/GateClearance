@@ -8,6 +8,7 @@ import {
     timestamp,
     pgEnum,
     integer,
+    jsonb
   } from "drizzle-orm/pg-core";
   
   /* ========= Enums ========= */
@@ -74,7 +75,8 @@ import {
     felonyConviction: boolean("felony_conviction").notNull().default(false),
     onProbationParole: boolean("on_probation_parole").notNull().default(false),
     pendingCharges: boolean("pending_charges").notNull().default(false),
-  
+    impactResponses: jsonb("impact_responses"),
+    rulesQuizAnswers: jsonb("rules_quiz_answers"),
     // Digital signature (per PR)
     digitalSignature: text("digital_signature"),
   

@@ -1,163 +1,181 @@
-// app/api/applications/submit/route.ts
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { validateFullApplication } from '@/lib/validation/applicationSchema';
 import { loadBlank2311, fill2311, type AppRecord } from '@/lib/pdf2311';
 import { uploadPDFToDrive } from '@/lib/googleDrive';
 
 export const runtime = 'nodejs';
 
-// ✅ Server-only Supabase client (PR feedback addressed)
 const supabase = createSupabaseClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   { auth: { persistSession: false, autoRefreshToken: false } }
 );
 
+// Helper: Convert form date (MM-DD-YYYY) to DB date (YYYY-MM-DD)
+const convertToDBDate = (formDate: string): string | null => {
+  if (!formDate) return null;
+  const [month, day, year] = formDate.split('-');
+  return `${year}-${month}-${day}`;
+};
+
 export async function POST(req: Request) {
   try {
-    console.log('=== APPLICATION SUBMIT STARTED ===');
-    
-    // Authenticate user
+    console.log('\n=== FINAL SUBMIT STARTED ===');
+
     const authSupabase = await createClient();
     const { data: { user }, error: authError } = await authSupabase.auth.getUser();
-    
+
     if (authError || !user) {
-      console.error('❌ Auth error:', authError);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    console.log('✅ User authenticated:', user.email);
-
     const body = await req.json();
-    console.log('📥 Request body keys:', Object.keys(body));
+    const { applicationId, ...formData } = body;
 
-    // Validate required fields
-    const requiredFields = [
-      'applicationId',
-      'firstName',
-      'lastName',
-      'dateOfBirth',
-      'gender',
-      'email',
-      'phoneNumber',
-      'companyOrOrganization',
-      'governmentIdType',
-      'governmentIdNumber',
-      'digitalSignature',
-    ];
+    console.log('📥 Submit data received:', { applicationId, hasFormData: !!formData });
 
-    const missingFields = requiredFields.filter(field => !body[field]);
+    // Load existing draft
+    const { data: existingDraft, error: loadError } = await supabase
+      .from('applications')
+      .select('*')
+      .eq('id', applicationId)
+      .eq('user_id', user.id)
+      .single();
 
-    // Check SSN if direct submission
-    if (body.submissionType === 'direct' && !body.ssn) {
-      missingFields.push('ssn (required for direct submission)');
+    if (loadError) {
+      console.error('❌ Failed to load draft:', loadError);
+      return NextResponse.json({ error: 'Draft not found' }, { status: 404 });
     }
 
-    if (missingFields.length > 0) {
-      console.error('❌ Missing fields:', missingFields);
+    console.log('✅ Loaded existing draft');
+
+    // Include applicationId in validation data
+    const dataForValidation = {
+      applicationId,
+      ...formData,
+      dateOfBirth: formData.dateOfBirth, // Keep as MM-DD-YYYY for validation
+      idExpiration: formData.idExpiration, // Keep as MM-DD-YYYY for validation
+    };
+
+    console.log('🔍 Validating with dates:', {
+      applicationId: dataForValidation.applicationId,
+      dateOfBirth: dataForValidation.dateOfBirth,
+      idExpiration: dataForValidation.idExpiration,
+    });
+
+    // Validate all data
+    const validationResult = validateFullApplication(dataForValidation);
+
+    if (!validationResult.success) {
+      console.error('❌ Validation failed:', validationResult.error.issues);
+      
+      const allErrors = validationResult.error.issues.map((err: any) => ({
+        field: err.path.join('.'),
+        message: err.message,
+      }));
+
       return NextResponse.json(
-        { error: `Missing required fields: ${missingFields.join(', ')}` },
+        {
+          error: 'Validation failed',
+          allErrors,
+        },
+        { status: 400 }
+      );
+    }
+
+    console.log('✅ Validation passed');
+
+    // Check for dummy values
+    if (formData.governmentIdNumber === 'PENDING' || 
+        formData.email === 'pending@example.com' ||
+        formData.phoneNumber === '0000000000') {
+      return NextResponse.json(
+        { error: 'Please complete all required fields before submitting' },
         { status: 400 }
       );
     }
 
     // ========================================
-    // SAVE TO DATABASE
+    // UPDATE DATABASE
     // ========================================
-    console.log('💾 Saving to database...');
+    console.log('💾 Updating database...');
 
-    // ✅ Using snake_case for applications table (Drizzle default naming)
-    const applicationData = {
-      id: body.applicationId,
-      user_id: user.id,
+    const updateData: any = {
+      // Step 1
+      first_name: formData.firstName,
+      last_name: formData.lastName,
+      other_names: formData.otherNames || null,
+      date_of_birth: convertToDBDate(formData.dateOfBirth),
+      gender: formData.gender,
+
+      // Step 2
+      email: formData.email,
+      phone_number: formData.phoneNumber,
+      company_or_organization: formData.companyOrOrganization,
+      purpose_of_visit: formData.purposeOfVisit || null,
+
+      // Step 5
+      government_id_type: formData.governmentIdType,
+      government_id_number: formData.governmentIdNumber,
+      id_state: formData.idState || null,
+      id_expiration: convertToDBDate(formData.idExpiration),
+      digital_signature: formData.digitalSignature,
       
-      // Personal info
-      email: body.email,
-      first_name: body.firstName,
-      last_name: body.lastName,
-      other_names: body.otherNames || null,
-      date_of_birth: body.dateOfBirth,
-      gender: body.gender,
+      // Background
+      former_inmate: formData.formerInmate === 'yes',
+      on_probation_parole: formData.onParole === 'yes',
       
-      // Contact info
-      phone_number: body.phoneNumber,
-      company_or_organization: body.companyOrOrganization,
-      purpose_of_visit: body.purposeOfVisit || null,
-      
-      // Government ID
-      government_id_type: body.governmentIdType,
-      government_id_number: body.governmentIdNumber,
-      id_state: body.idState || null,
-      id_expiration: body.idExpiration || null,
-      
-      // Background questions
-      visited_inmate: body.visitedInmate === 'yes',
-      former_inmate: body.formerInmate === 'yes',
-      restricted_access: body.restrictedAccess === 'yes',
-      felony_conviction: body.felonyConviction === 'yes',
-      on_probation_parole: body.onProbationParole === 'yes',
-      pending_charges: body.pendingCharges === 'yes',
-      
-      // Signature
-      digital_signature: body.digitalSignature,
-      
-      // System fields
-      authorization_type: 'gate_clearance',
+      // Status
       status: 'submitted',
       submitted_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     };
 
-    const { data: savedApp, error: saveError } = await supabase
+    const { error: updateError } = await supabase
       .from('applications')
-      .upsert(applicationData, { onConflict: 'id' })
-      .select()
-      .single();
+      .update(updateData)
+      .eq('id', applicationId)
+      .eq('user_id', user.id);
 
-    if (saveError) {
-      console.error('❌ Database error:', saveError);
+    if (updateError) {
+      console.error('❌ Update failed:', updateError);
       return NextResponse.json(
-        { error: `Database error: ${saveError.message}` },
+        { error: `Failed to submit: ${updateError.message}` },
         { status: 500 }
       );
     }
 
-    console.log('✅ Saved to database');
+    console.log('✅ Database updated');
 
     // ========================================
     // GENERATE PDF
     // ========================================
     console.log('📄 Generating PDF...');
 
-    const formatDate = (dateStr: string | null | undefined) => {
-      if (!dateStr) return '';
-      if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) return dateStr;
-      const [year, month, day] = dateStr.split('-');
-      return `${month}-${day}-${year}`;
-    };
-
     const pdfRecord: AppRecord = {
-      first_name: body.firstName,
-      last_name: body.lastName,
-      other_names: body.otherNames || '',
-      date_of_birth: formatDate(body.dateOfBirth),
-      phone_number: body.phoneNumber,
-      email: body.email,
-      company: body.companyOrOrganization,
-      purpose_of_visit: body.purposeOfVisit || '',
-      gender: body.gender,
-      gov_id_type: body.governmentIdType,
-      gov_id_number: body.governmentIdNumber,
-      id_state: body.idState || '',
-      id_expiration: formatDate(body.idExpiration),
-      signature_data_url: body.digitalSignature,
-      visited_inmate: body.visitedInmate === 'yes',
-      former_inmate: body.formerInmate === 'yes',
-      restricted_access: body.restrictedAccess === 'yes',
-      felony_conviction: body.felonyConviction === 'yes',
-      on_probation_parole: body.onProbationParole === 'yes',
-      pending_charges: body.pendingCharges === 'yes',
-      ssn_full: body.ssn,
+      first_name: formData.firstName,
+      last_name: formData.lastName,
+      other_names: formData.otherNames || '',
+      date_of_birth: formData.dateOfBirth, // Keep MM-DD-YYYY for PDF
+      phone_number: formData.phoneNumber,
+      email: formData.email,
+      company: formData.companyOrOrganization,
+      purpose_of_visit: formData.purposeOfVisit || '',
+      gender: formData.gender,
+      gov_id_type: formData.governmentIdType,
+      gov_id_number: formData.governmentIdNumber,
+      id_state: formData.idState || '',
+      id_expiration: formData.idExpiration, // Keep MM-DD-YYYY for PDF
+      signature_data_url: formData.digitalSignature,
+      visited_inmate: false,
+      former_inmate: formData.formerInmate === 'yes',
+      restricted_access: false,
+      felony_conviction: false,
+      on_probation_parole: formData.onParole === 'yes',
+      pending_charges: false,
+      ssn_full: formData.ssnFull || formData.ssnFirstFive || undefined,
     };
 
     const pdfDoc = await loadBlank2311();
@@ -171,9 +189,8 @@ export async function POST(req: Request) {
     // ========================================
     console.log('📤 Uploading to Google Drive...');
 
-    const filename = `CDCR_2311_${body.firstName}_${body.lastName}_${body.applicationId}.pdf`;
+    const filename = `CDCR_2311_${formData.firstName}_${formData.lastName}_${applicationId}.pdf`;
     
-    // ✅ FIX: Destructure the return value
     const { fileId } = await uploadPDFToDrive(
       Buffer.from(pdfBytes),
       filename
@@ -186,38 +203,34 @@ export async function POST(req: Request) {
     // ========================================
     console.log('💾 Saving document metadata...');
 
-    // ✅ CRITICAL: Using snake_case column names to match Drizzle schema
-    // Your schema uses: applicationId, url, filename, mimeType, sizeBytes, uploadedByUserId
-    // But Drizzle converts these to snake_case in Postgres: application_id, mime_type, etc.
     const { error: docError } = await supabase
       .from('documents')
       .insert({
-        application_id: body.applicationId,     // ✅ snake_case (Drizzle default)
-        url: ` `,                 
-        filename: filename,                      // ✅ Already snake_case
-        mime_type: 'application/pdf',           // ✅ snake_case
-        size_bytes: pdfBytes.length,            // ✅ snake_case
-        uploaded_by_user_id: user.id,           // ✅ snake_case
+        application_id: applicationId,
+        filename: filename,
+        url: ' ',
+        mime_type: 'application/pdf',
+        size_bytes: pdfBytes.length,
+        uploaded_by_user_id: user.id,
       });
 
     if (docError) {
       console.error('⚠️ Document metadata error:', docError);
-      // ✅ Don't fail the whole request - PDF is already uploaded
     } else {
       console.log('✅ Document metadata saved');
     }
 
     console.log('✅✅✅ APPLICATION SUBMISSION COMPLETE');
+    console.log('=== FINAL SUBMIT COMPLETED ===\n');
 
-    // ✅ PR Feedback: No webViewLink in response
     return NextResponse.json({
       success: true,
-      applicationId: body.applicationId,
       message: 'Application submitted successfully',
+      applicationId,
     });
 
   } catch (error) {
-    console.error('❌❌❌ FATAL ERROR:', error);
+    console.error('❌ Submit error:', error);
     console.error('Stack:', error instanceof Error ? error.stack : 'No stack');
     
     return NextResponse.json(
@@ -228,4 +241,5 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
-}
+ }
+

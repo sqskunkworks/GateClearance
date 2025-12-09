@@ -1,14 +1,13 @@
 // ============================================
-// FILE 1: lib/validation/applicationSchema.ts
+// FILE: lib/validation/applicationSchema.ts - OLD ZOD COMPATIBLE
 // ============================================
 import { z } from 'zod';
 
 // Helper validators
-const phoneRegex = /^\+?[1-9]\d{9,14}$/; // E.164 format
+const phoneRegex = /^\+?[1-9]\d{9,14}$/;
 const ssnRegex = /^\d{3}-?\d{2}-?\d{4}$/;
-const dateRegex = /^\d{2}-\d{2}-\d{4}$/; // MM-DD-YYYY
+const dateRegex = /^\d{2}-\d{2}-\d{4}$/;
 
-// Reusable validators
 const isValidDate = (dateStr: string) => {
   if (!dateRegex.test(dateStr)) return false;
   const [mm, dd, yyyy] = dateStr.split('-').map(Number);
@@ -33,224 +32,273 @@ const isFutureDate = (dateStr: string) => {
 // STEP 1: PERSONAL INFORMATION
 // ============================================
 export const personalInfoSchema = z.object({
-  firstName: z.string().min(1, 'First name is required').max(100),
-  lastName: z.string().min(1, 'Last name is required').max(100),
-  otherNames: z.string().max(200).optional(),
+  firstName: z
+    .string()
+    .min(1, 'Please enter your first name')
+    .max(100, 'First name is too long (maximum 100 characters)'),
+  
+  lastName: z
+    .string()
+    .min(1, 'Please enter your last name')
+    .max(100, 'Last name is too long (maximum 100 characters)'),
+  
+  otherNames: z
+    .string()
+    .max(200, 'Other names are too long (maximum 200 characters)')
+    .optional(),
+  
   dateOfBirth: z
     .string()
-    .min(1, 'Date of birth is required')
-    .refine(isValidDate, 'Must be a valid date in MM-DD-YYYY format')
+    .min(1, 'Please enter your date of birth')
+    .refine(isValidDate, 'Please enter a valid date in MM-DD-YYYY format (e.g., 12-15-1990)')
     .refine((date) => {
       if (!isValidDate(date)) return true;
       const [mm, dd, yyyy] = date.split('-').map(Number);
       const birthDate = new Date(yyyy, mm - 1, dd);
       const age = new Date().getFullYear() - birthDate.getFullYear();
       return age >= 18 && age <= 120;
-    }, 'Must be 18-120 years old'),
-  gender: z.enum(['male', 'female', 'nonbinary', 'prefer_not_to_say', 'other'], {
-    message: 'Please select a gender',
-  }),
+    }, 'You must be at least 18 years old to apply'),
+  
+  gender: z.enum(['male', 'female', 'nonbinary', 'prefer_not_to_say', 'other']),
 });
 
 // ============================================
 // STEP 2: CONTACT & ORGANIZATION
 // ============================================
 export const contactInfoSchema = z.object({
-  email: z.string().email('Invalid email address'),
+  email: z
+    .string()
+    .min(1, 'Please enter your email address')
+    .email('Please enter a valid email address (e.g., name@example.com)'),
+  
   phoneNumber: z
     .string()
-    .min(1, 'Phone number is required')
+    .min(1, 'Please enter your phone number')
     .refine(
-      (val) => phoneRegex.test(val.replace(/[\s()-]/g, '')),
-      'Invalid phone number format'
+      (val) => {
+        const cleaned = val.replace(/[\s()-]/g, '');
+        return phoneRegex.test(cleaned);
+      },
+      'Please enter a valid phone number (e.g., 415-555-1234 or +1 415 555 1234)'
     ),
+  
   visitDate: z
     .string()
     .optional()
-    .refine((val) => !val || isValidDate(val), 'Invalid date format (MM-DD-YYYY)'),
-  companyOrOrganization: z.string().min(1, 'Company/Organization is required').max(200),
-  purposeOfVisit: z.string().min(10, 'Purpose must be at least 10 characters').max(1000),
+    .refine(
+      (val) => !val || isValidDate(val),
+      'Please enter a valid date in MM-DD-YYYY format'
+    ),
+  
+  companyOrOrganization: z
+    .string()
+    .min(1, 'Please enter your company or organization name')
+    .max(200, 'Company/Organization name is too long (maximum 200 characters)'),
+  
+  purposeOfVisit: z
+    .string()
+    .min(10, 'Please provide more detail about your visit purpose (at least 10 characters)')
+    .max(1000, 'Purpose of visit is too long (maximum 1000 characters)'),
 });
 
 // ============================================
 // STEP 3: EXPERIENCE & EXPECTATIONS
 // ============================================
 export const experienceSchema = z.object({
-  engagedDirectly: z.enum(
-    ['no_first_time', 'personal_connection', 'volunteer', 'professional', 'other'],
-    { message: 'Please select an option' }
-  ),
-  perceptions: z.string().min(20, 'Please provide at least 20 characters').max(2000),
-  expectations: z.string().min(20, 'Please provide at least 20 characters').max(2000),
-  justiceReformBefore: z.enum(
-    ['active', 'limited', 'never', 'thought_about', 'other'],
-    { message: 'Please select an option' }
-  ),
-  interestsMost: z.string().min(20, 'Please provide at least 20 characters').max(2000),
-  reformFuture: z.enum(
-    ['already_involved_continue', 'considering', 'maybe', 'one_time', 'other'],
-    { message: 'Please select an option' }
-  ),
-  additionalNotes: z.string().max(2000).optional(),
+  engagedDirectly: z.enum([
+    'no_first_time',
+    'personal_connection',
+    'volunteer',
+    'professional',
+    'other',
+  ]),
+  
+  perceptions: z
+    .string()
+    .min(20, 'Please share your thoughts in more detail (at least 20 characters)')
+    .max(2000, 'Response is too long (maximum 2000 characters)'),
+  
+  expectations: z
+    .string()
+    .min(20, 'Please share your expectations in more detail (at least 20 characters)')
+    .max(2000, 'Response is too long (maximum 2000 characters)'),
+  
+  justiceReformBefore: z.enum([
+    'active',
+    'limited',
+    'never',
+    'thought_about',
+    'other',
+  ]),
+  
+  interestsMost: z
+    .string()
+    .min(20, 'Please share what interests you in more detail (at least 20 characters)')
+    .max(2000, 'Response is too long (maximum 2000 characters)'),
+  
+  reformFuture: z.enum([
+    'already_involved_continue',
+    'considering',
+    'maybe',
+    'one_time',
+    'other',
+  ]),
+  
+  additionalNotes: z
+    .string()
+    .max(2000, 'Additional notes are too long (maximum 2000 characters)')
+    .optional(),
 });
 
 // ============================================
 // STEP 4: RULES & ACKNOWLEDGMENT
 // ============================================
 export const rulesSchema = z.object({
-  rulesColor: z.enum(['Blue', 'Green', 'Yellow', 'Orange', 'Gray', 'Black'], {
-    message: 'Please select a color',
-  }).refine((val) => val === 'Black', 'Only black clothing is allowed'),
+  rulesColor: z
+    .enum(['Blue', 'Green', 'Yellow', 'Orange', 'Gray', 'Black'])
+    .refine((val) => val === 'Black', 'Only black clothing is allowed'),
   
-  rulesPhonePolicy: z.enum(
-    ['Bring inside', 'Leave in car / check at East Gate', 'Clear bag inside'],
-    { message: 'Please select an option' }
-  ).refine(
-    (val) => val === 'Leave in car / check at East Gate',
-    'You must leave devices in your car or check at East Gate'
-  ),
+  rulesPhonePolicy: z
+    .enum([
+      'Bring inside',
+      'Leave in car / check at East Gate',
+      'Clear bag inside',
+    ])
+    .refine(
+      (val) => val === 'Leave in car / check at East Gate',
+      'You must leave devices in your car or check them at East Gate'
+    ),
   
-  rulesShareContact: z.enum(
-    ['Direct to public handles', 'Politely decline + ask Kai/Escort', 'Accept + keep confidential'],
-    { message: 'Please select an option' }
-  ).refine(
-    (val) => val === 'Politely decline + ask Kai/Escort',
-    'Contact exchange requires approval from Kai and your escort'
-  ),
+  rulesShareContact: z
+    .enum([
+      'Direct to public handles',
+      'Politely decline + ask Kai/Escort',
+      'Accept + keep confidential',
+    ])
+    .refine(
+      (val) => val === 'Politely decline + ask Kai/Escort',
+      'Contact exchange requires approval from Kai and your escort'
+    ),
   
-  rulesWrittenMaterials: z.enum(
-    [
+  rulesWrittenMaterials: z
+    .enum([
       'Personal business cards',
       'Contact information cards',
       'Materials related to SkunkWorks with approval',
       'Personal notes',
-    ],
-    { message: 'Please select an option' }
-  ).refine(
-    (val) => val === 'Materials related to SkunkWorks with approval',
-    'Only SkunkWorks-related materials with approval are permitted'
-  ),
+    ])
+    .refine(
+      (val) => val === 'Materials related to SkunkWorks with approval',
+      'Only SkunkWorks-related materials with approval are permitted'
+    ),
   
-  acknowledgmentAgreement: z.literal(true, {
-    message: 'You must agree to follow all rules',
-  }),
+  acknowledgmentAgreement: z.literal(true),
 });
 
 // ============================================
-// STEP 5: SECURITY CLEARANCE (Complex)
+// STEP 5: SECURITY CLEARANCE
 // ============================================
 export const securitySchema = z
   .object({
-    // Government ID
-    governmentIdType: z.enum(['driver_license', 'passport'], {
-      message: 'Please select ID type',
-    }),
+    governmentIdType: z.enum(['driver_license', 'passport']),
+    
     governmentIdNumber: z
       .string()
-      .min(1, 'Government ID number is required')
-      .max(50)
-      .transform((val) => val.toUpperCase().replace(/[^A-Z0-9]/g, '')),
-    governmentIdNumberConfirm: z.string().min(1, 'Please confirm your ID number'),
+      .min(1, 'Please enter your government ID number')
+      .max(50, 'ID number is too long (maximum 50 characters)'),
     
-    // State (conditional)
-    idState: z.string().max(2).optional(),
+    governmentIdNumberConfirm: z
+      .string()
+      .min(1, 'Please confirm your ID number'),
     
-    // Expiration
+    idState: z
+      .string()
+      .max(2, 'State code must be 2 letters (e.g., CA, NY, TX)')
+      .optional(),
+    
     idExpiration: z
       .string()
-      .min(1, 'ID expiration is required')
-      .refine(isValidDate, 'Invalid date format (MM-DD-YYYY)')
-      .refine(isFutureDate, 'ID is expired'),
+      .min(1, 'Please enter your ID expiration date')
+      .refine(
+        isValidDate,
+        'Please enter a valid date in MM-DD-YYYY format (e.g., 12-15-2026)'
+      )
+      .refine(
+        isFutureDate,
+        'Your ID has expired. Please renew it before submitting this application'
+      ),
     
-    // SSN Method
-    ssnMethod: z.enum(['direct', 'call', 'split'], {
-      message: 'Please select how to provide SSN',
-    }),
+    ssnMethod: z.enum(['direct', 'call', 'split']),
     
-    // SSN Direct (conditional)
     ssnFull: z.string().optional(),
     ssnFullConfirm: z.string().optional(),
     
-    // SSN Split (conditional)
     ssnFirstFive: z.string().optional(),
     ssnFirstFiveConfirm: z.string().optional(),
     
-    // Background Questions
-    formerInmate: z.enum(['yes', 'no'], {
-      message: 'Please answer this question',
-    }),
+    formerInmate: z.enum(['yes', 'no']),
+    
     wardenLetter: z.instanceof(File).optional(),
     
-    onParole: z.enum(['yes', 'no'], {
-      message: 'Please answer this question',
-    }),
+    onParole: z.enum(['yes', 'no']),
     
-    // Confirmations
-    confirmAccuracy: z.literal(true, {
-      message: 'You must confirm accuracy',
-    }),
+    confirmAccuracy: z.literal(true),
     
-    digitalSignature: z.string().min(1, 'Digital signature is required'),
+    digitalSignature: z
+      .string()
+      .min(1, 'Please provide your digital signature'),
     
-    consentToDataUse: z.literal(true, {
-      message: 'You must consent to data use',
-    }),
+    consentToDataUse: z.literal(true),
   })
-  // Cross-field validations
   .refine(
     (data) => {
-      // ID State required for driver's license
       if (data.governmentIdType === 'driver_license') {
         return data.idState && data.idState.length === 2;
       }
       return true;
     },
     {
-      message: 'State is required for driver\'s license',
+      message: "Please enter the state where your driver's license was issued (e.g., CA, NY, TX)",
       path: ['idState'],
     }
   )
   .refine(
     (data) => {
-      // ID State NOT allowed for passport
       if (data.governmentIdType === 'passport' && data.idState) {
         return false;
       }
       return true;
     },
     {
-      message: 'Do not provide state for passports',
+      message: 'State is not required for passports',
       path: ['idState'],
     }
   )
   .refine(
     (data) => {
-      // ID Number confirmation must match
       const normalized1 = data.governmentIdNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
       const normalized2 = data.governmentIdNumberConfirm.toUpperCase().replace(/[^A-Z0-9]/g, '');
       return normalized1 === normalized2;
     },
     {
-      message: 'ID numbers do not match',
+      message: 'ID numbers do not match. Please check and try again',
       path: ['governmentIdNumberConfirm'],
     }
   )
   .refine(
     (data) => {
-      // SSN required if direct method
       if (data.ssnMethod === 'direct') {
         return data.ssnFull && ssnRegex.test(data.ssnFull);
       }
       return true;
     },
     {
-      message: 'SSN is required for direct submission',
+      message: 'Please enter your full SSN in the format 123-45-6789',
       path: ['ssnFull'],
     }
   )
   .refine(
     (data) => {
-      // SSN confirmation must match (direct)
       if (data.ssnMethod === 'direct' && data.ssnFull && data.ssnFullConfirm) {
         const clean1 = data.ssnFull.replace(/\D/g, '');
         const clean2 = data.ssnFullConfirm.replace(/\D/g, '');
@@ -259,26 +307,24 @@ export const securitySchema = z
       return true;
     },
     {
-      message: 'SSN numbers do not match',
+      message: 'SSN numbers do not match. Please check and try again',
       path: ['ssnFullConfirm'],
     }
   )
   .refine(
     (data) => {
-      // First 5 SSN digits required if split method
       if (data.ssnMethod === 'split') {
         return data.ssnFirstFive && /^\d{5}$/.test(data.ssnFirstFive.replace(/\D/g, ''));
       }
       return true;
     },
     {
-      message: 'First 5 digits of SSN are required',
+      message: 'Please enter the first 5 digits of your SSN (numbers only)',
       path: ['ssnFirstFive'],
     }
   )
   .refine(
     (data) => {
-      // SSN first 5 confirmation must match (split)
       if (data.ssnMethod === 'split' && data.ssnFirstFive && data.ssnFirstFiveConfirm) {
         const clean1 = data.ssnFirstFive.replace(/\D/g, '');
         const clean2 = data.ssnFirstFiveConfirm.replace(/\D/g, '');
@@ -287,20 +333,19 @@ export const securitySchema = z
       return true;
     },
     {
-      message: 'SSN digits do not match',
+      message: 'SSN digits do not match. Please check and try again',
       path: ['ssnFirstFiveConfirm'],
     }
   )
   .refine(
     (data) => {
-      // Warden letter required if former inmate
       if (data.formerInmate === 'yes') {
         return data.wardenLetter instanceof File;
       }
       return true;
     },
     {
-      message: 'Warden letter is required for former inmates',
+      message: 'Please upload a letter from the Warden (required for former inmates)',
       path: ['wardenLetter'],
     }
   );
@@ -328,7 +373,6 @@ export type Security = z.infer<typeof securitySchema>;
 // VALIDATION HELPERS
 // ============================================
 
-// Validate a single step
 export function validateStep(step: number, data: Partial<FullApplication>) {
   switch (step) {
     case 1:
@@ -342,16 +386,14 @@ export function validateStep(step: number, data: Partial<FullApplication>) {
     case 5:
       return securitySchema.safeParse(data);
     default:
-      return { success: false, error: { errors: [{ message: 'Invalid step' }] } };
+      return { success: false, error: { issues: [{ message: 'Invalid step number' }] } };
   }
 }
 
-// Validate entire application
 export function validateFullApplication(data: Partial<FullApplication>) {
   return fullApplicationSchema.safeParse(data);
 }
 
-// Get error messages from Zod result
 export function getErrorMessages(result: z.ZodError<any>): Record<string, string> {
   const errors: Record<string, string> = {};
   result.issues.forEach((err) => {

@@ -14,7 +14,7 @@ export default function LoginPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get('redirectTo') || '/test-application';
+  const redirectTo = searchParams.get('redirectTo') || '/test-application/1';
 
   const supabase = createClient();
   console.log('🔍 Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
