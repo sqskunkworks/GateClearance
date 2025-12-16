@@ -1,4 +1,10 @@
-
+/**
+ * Security endpoint for Step 5
+ * 
+ * This endpoint stores non-sensitive security fields (ID type, state, expiration)
+ * immediately before submit. Sensitive fields (ID number, signature, background checks)
+ * are only stored during the final submit via POST /api/applications/submit.
+ */
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
