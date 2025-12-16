@@ -2,7 +2,6 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 export async function updateSession(request: NextRequest) {
-  console.log('🔍 Middleware running for:', request.nextUrl.pathname);
   
   let supabaseResponse = NextResponse.next({
     request,
@@ -31,7 +30,7 @@ export async function updateSession(request: NextRequest) {
     error
   } = await supabase.auth.getUser();
 
-  console.log('👤 User check:', { hasUser: !!user, hasError: !!error, email: user?.email });
+ 
 
   const isAuthenticated = user && !error;
 
@@ -47,16 +46,9 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith(path)
   );
 
-  console.log('🔐 Route check:', { 
-    path: request.nextUrl.pathname,
-    isProtected: isProtectedPath, 
-    isAuthenticated,
-    willRedirect: isProtectedPath && !isAuthenticated
-  });
 
   
   if (isProtectedPath && !isAuthenticated) {
-    console.log('🚫 Redirecting to login - not authenticated');
     const url = request.nextUrl.clone();
     url.pathname = '/auth/login';
     url.searchParams.set('redirectTo', request.nextUrl.pathname);
@@ -65,12 +57,11 @@ export async function updateSession(request: NextRequest) {
 
   
   if (isAuthPath && isAuthenticated) {
-    console.log('🔄 Redirecting to app - already authenticated');
     const url = request.nextUrl.clone();
     url.pathname = '/test-application';
     return NextResponse.redirect(url);
   }
 
-  console.log('✅ Allowing access');
+
   return supabaseResponse;
 }

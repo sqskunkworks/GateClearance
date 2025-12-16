@@ -23,7 +23,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    console.log('📝 Updating personal info...');
+  
 
     const authSupabase = await createClient();
     const { data: { user }, error: authError } = await authSupabase.auth.getUser();
@@ -58,7 +58,7 @@ export async function PATCH(
       );
     }
 
-    console.log('✅ Personal info updated');
+   
 
     return NextResponse.json({
       success: true,
@@ -66,7 +66,7 @@ export async function PATCH(
     });
 
   } catch (error) {
-    console.error('❌ Update personal error:', error);
+
     return NextResponse.json(
       { error: 'Failed to update personal info' },
       { status: 500 }

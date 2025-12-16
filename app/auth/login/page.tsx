@@ -44,15 +44,7 @@ export default function LoginPage() {
         password,
       });
 
-      console.log('📊 Login response:', {
-        hasError: !!error,
-        errorMessage: error?.message,
-        hasUser: !!data?.user,
-        hasSession: !!data?.session,
-        emailConfirmed: data?.user?.email_confirmed_at,
-        userId: data?.user?.id
-      });
-
+ 
       if (error) {
         console.error('❌ Supabase error:', error);
         throw error;
@@ -63,11 +55,10 @@ export default function LoginPage() {
         throw new Error('Unable to create session. Please try again or contact support.');
       }
 
-      console.log('✅ Login successful, redirecting to:', redirectTo);
+
       router.push(redirectTo);
       router.refresh();
     } catch (err: any) {
-      console.error('❌ Login error:', err);
       setError(err.message || 'Failed to sign in');
     } finally {
       setLoading(false);

@@ -17,7 +17,7 @@ const ADMIN_SECRET = process.env.ADMIN_DOWNLOAD_SECRET!;
 
 export async function POST(req: Request) {
   try {
-    console.log('=== PDF Generation Request Started ===');
+  
     
     const secret = req.headers.get('x-admin-secret');
     
@@ -35,14 +35,9 @@ export async function POST(req: Request) {
     const { applicationId, ssn_full, ...extraFields } = body;
 
     if (!applicationId) {
-      console.error('❌ Missing applicationId');
       return NextResponse.json({ error: 'Missing applicationId' }, { status: 400 });
     }
 
-    console.log('✓ Auth passed, fetching applicationId:', applicationId);
-    console.log('✓ Extra fields received:', Object.keys(extraFields));
-
-    console.log('→ Querying Supabase...');
     const { data, error } = await supabase
       .from('applications')
       .select('*')
@@ -55,11 +50,11 @@ export async function POST(req: Request) {
     }
 
     if (!data) {
-      console.error('❌ Application not found');
+
       return NextResponse.json({ error: 'Application not found' }, { status: 404 });
     }
 
-    console.log('✓ Supabase record retrieved');
+
 
     const formatDate = (dateStr: string | null) => {
       if (!dateStr) return '';
@@ -95,17 +90,12 @@ export async function POST(req: Request) {
       ssn_full: ssn_full || undefined,
     };
 
-    console.log('✓ Mapped record for PDF (with SSN from frontend)');
-
-    console.log('→ Loading blank PDF template...');
     let pdf;
     try {
       pdf = await loadBlank2311();
-      console.log('✓ PDF template loaded successfully');
-      
-      console.log('→ Filling PDF with data...');
+   
       await fill2311(pdf, record);
-      console.log('✓ PDF filled successfully');
+
     } catch (pdfErr) {
       console.error('❌ PDF generation error:', pdfErr);
       console.error('Stack trace:', pdfErr instanceof Error ? pdfErr.stack : 'N/A');
@@ -118,13 +108,10 @@ export async function POST(req: Request) {
       );
     }
 
-    console.log('→ Saving PDF...');
     const bytes = await pdf.save();
-    console.log('✓ PDF saved, size:', bytes.length, 'bytes');
+  
     const filename = `CDCR_2311_${applicationId}.pdf`;
 
-    console.log('✓✓✓ PDF generated successfully:', filename);
-    console.log('=== PDF Generation Request Completed ===');
 
     return new NextResponse(Buffer.from(bytes), {
       status: 200,
@@ -136,7 +123,7 @@ export async function POST(req: Request) {
     });
 
   } catch (err: unknown) {
-    console.error('❌❌❌ Unhandled error in API route:', err);
+    console.error('Unhandled error in API route:', err);
     console.error('Error type:', typeof err);
     console.error('Stack trace:', err instanceof Error ? err.stack : 'N/A');
     const message = err instanceof Error ? err.message : 'Failed to generate PDF';

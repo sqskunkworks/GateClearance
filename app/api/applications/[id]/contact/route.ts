@@ -17,7 +17,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    console.log('📝 Updating contact info...');
+  
 
     const authSupabase = await createClient();
     const { data: { user }, error: authError } = await authSupabase.auth.getUser();
@@ -38,7 +38,7 @@ export async function PATCH(
       updated_at: new Date().toISOString(),
     };
 
-    console.log('Updating with data:', updateData);
+   
 
     const { error } = await supabase
       .from('applications')
@@ -47,14 +47,13 @@ export async function PATCH(
       .eq('user_id', user.id);
 
     if (error) {
-      console.error('DB error:', error);
+    
       return NextResponse.json(
         { error: `Failed to update: ${error.message}` },
         { status: 500 }
       );
     }
 
-    console.log('✅ Contact info updated');
 
     return NextResponse.json({
       success: true,
@@ -62,7 +61,7 @@ export async function PATCH(
     });
 
   } catch (error) {
-    console.error('❌ Update contact error:', error);
+
     return NextResponse.json(
       { error: 'Failed to update contact info' },
       { status: 500 }

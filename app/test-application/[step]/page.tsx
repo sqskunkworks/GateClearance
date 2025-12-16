@@ -34,19 +34,17 @@ export default function StepPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
-  console.log('🎯 StepPage render:', { currentStep, applicationIdFromUrl, hasFormData: Object.keys(formData).length > 0 });
+  
 
   useEffect(() => {
-    console.log('🔄 useEffect triggered:', { currentStep, applicationIdFromUrl });
     loadFormData();
   }, [applicationIdFromUrl, currentStep]);
 
   const loadFormData = async () => {
     try {
-      console.log('📂 loadFormData called:', { currentStep, applicationIdFromUrl });
+      
 
       if (applicationIdFromUrl) {
-        console.log('✅ ID found in URL, loading draft...');
         setApplicationId(applicationIdFromUrl);
         await loadDraft(applicationIdFromUrl);
         return;
@@ -54,55 +52,46 @@ export default function StepPage() {
 
       if (currentStep === 1) {
         const newId = crypto.randomUUID();
-        console.log('🆕 Step 1 without ID, generating new:', newId);
+       
         setApplicationId(newId);
         setFormData({});
         setLoading(false);
         return;
       }
 
-      console.log('⚠️ No ID on Step', currentStep, '- redirecting to Step 1');
       router.push('/test-application/1');
       setLoading(false);
     } catch (error) {
-      console.error('❌ loadFormData error:', error);
       setLoading(false);
     }
   };
 
   const loadDraft = async (appId: string) => {
     try {
-      console.log('📥 loadDraft starting for:', appId);
       
       const response = await fetch(`/api/applications/${appId}`);
-      console.log('📡 GET response status:', response.status);
       
       if (!response.ok) {
-        console.error('❌ GET failed:', response.status, response.statusText);
         throw new Error('Failed to load');
       }
 
       const { draft } = await response.json();
-      console.log('✅ Draft loaded from DB:', draft);
-      
-      // ✅ Load visit date from sessionStorage
+ 
       const visitDate = sessionStorage.getItem(`app_${appId}_visitDate`);
       if (visitDate) {
         draft.visitDate = visitDate;
         draft.preferredVisitDate = visitDate;
-        console.log('✅ Loaded visit date from sessionStorage:', visitDate);
+       
       }
       
       setFormData(draft);
       setLoading(false);
     } catch (error) {
-      console.error('❌ loadDraft error:', error);
       setLoading(false);
     }
   };
 
   const handleStepComplete = async (payload: any) => {
-    console.log('🚀 handleStepComplete:', { currentStep, payload, applicationId });
     
     const updatedFormData = { ...formData, ...payload };
     setFormData(updatedFormData);
@@ -110,8 +99,7 @@ export default function StepPage() {
     try {
       if (currentStep === 1) {
         if (applicationIdFromUrl) {
-          console.log('💾 Step 1: Updating existing personal info...');
-          
+         
           const response = await fetch(`/api/applications/${applicationId}/personal`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
@@ -119,19 +107,18 @@ export default function StepPage() {
           });
 
           const result = await response.json();
-          console.log('📡 PATCH response:', { status: response.status, result });
-
+       
           if (!response.ok) {
-            console.error('❌ Update failed:', result);
+         
             throw new Error(result.error);
           }
 
           setLastSaved(new Date());
-          console.log('✅ Personal info updated, navigating to Step 2');
+          
           router.push(`/test-application/2?id=${applicationId}`);
           return;
         } else {
-          console.log('💾 Step 1: Creating new draft...');
+      
           
           const response = await fetch('/api/applications/create', {
             method: 'POST',
@@ -143,15 +130,15 @@ export default function StepPage() {
           });
 
           const result = await response.json();
-          console.log('📡 POST response:', { status: response.status, result });
+       
 
           if (!response.ok) {
-            console.error('❌ Create failed:', result);
+
             throw new Error(result.error);
           }
 
           setLastSaved(new Date());
-          console.log('✅ Draft created, navigating to Step 2 with ID:', applicationId);
+       
           
           window.history.replaceState(null, '', `/test-application/1?id=${applicationId}`);
           router.push(`/test-application/2?id=${applicationId}`);
@@ -160,11 +147,11 @@ export default function StepPage() {
       }
 
       if (currentStep === 2) {
-        console.log('💾 Step 2: Updating contact...');
+    
         const visitDate = updatedFormData.visitDate || updatedFormData.preferredVisitDate;
         if (visitDate) {
           sessionStorage.setItem(`app_${applicationId}_visitDate`, visitDate);
-          console.log('✅ Saved visit date to sessionStorage:', visitDate);
+          
         }
         
         const response = await fetch(`/api/applications/${applicationId}/contact`, {
@@ -175,18 +162,18 @@ export default function StepPage() {
 
         if (!response.ok) {
           const result = await response.json();
-          console.error('❌ Contact update failed:', result);
+
           throw new Error(result.error);
         }
 
         setLastSaved(new Date());
-        console.log('✅ Contact saved, navigating to Step 3');
+ 
         router.push(`/test-application/3?id=${applicationId}`);
         return;
       }
 
       if (currentStep === 3) {
-        console.log('💾 Step 3: Updating experience...');
+
         
         const response = await fetch(`/api/applications/${applicationId}/experience`, {
           method: 'PATCH',
@@ -196,18 +183,18 @@ export default function StepPage() {
       
         if (!response.ok) {
           const result = await response.json();
-          console.error('❌ Experience update failed:', result);
+        
           throw new Error(result.error);
         }
       
         setLastSaved(new Date());
-        console.log('✅ Experience saved, navigating to Step 4');
+        
         router.push(`/test-application/4?id=${applicationId}`);
         return;
       }
       
       if (currentStep === 4) {
-        console.log('💾 Step 4: Updating rules...');
+
         
         const response = await fetch(`/api/applications/${applicationId}/rules`, {
           method: 'PATCH',
@@ -217,19 +204,19 @@ export default function StepPage() {
       
         if (!response.ok) {
           const result = await response.json();
-          console.error('❌ Rules update failed:', result);
+
           throw new Error(result.error);
         }
       
         setLastSaved(new Date());
-        console.log('✅ Rules saved, navigating to Step 5');
+
         router.push(`/test-application/5?id=${applicationId}`);
         return;
       }
 
       if (currentStep === 5) {
         setIsSubmitting(true);
-        console.log('💾 Step 5: Saving security info first...');
+        
       
         // First, save non-file security data via JSON
         const securityDataWithoutFiles = { ...updatedFormData };
@@ -244,12 +231,11 @@ export default function StepPage() {
       
         if (!securityResponse.ok) {
           const result = await securityResponse.json();
-          console.error('❌ Security update failed:', result);
+     
           setIsSubmitting(false);
           throw new Error(result.error);
         }
       
-        console.log('✅ Security saved, now submitting with FormData...');
       
         // ✅ Use FormData for final submit (includes files)
         const formData = new FormData();
@@ -264,14 +250,14 @@ export default function StepPage() {
           if (value instanceof File) {
             // Add files directly
             formData.append(key, value);
-            console.log(`📎 Added file: ${key} (${value.name})`);
+          
           } else if (value !== null && value !== undefined) {
             // Add regular fields as strings
             formData.append(key, String(value));
           }
         });
       
-        console.log('📤 Submitting with FormData...');
+       
       
         const submitResponse = await fetch('/api/applications/submit', {
           method: 'POST',
@@ -279,7 +265,7 @@ export default function StepPage() {
         });
       
         const submitResult = await submitResponse.json();
-        console.log('📡 Submit response:', { status: submitResponse.status, submitResult });
+
       
         if (!submitResponse.ok) {
           setIsSubmitting(false);
@@ -294,13 +280,12 @@ export default function StepPage() {
           return;
         }
       
-        console.log('✅ Submitted successfully');
+       
         sessionStorage.removeItem(`app_${applicationId}_visitDate`);
         router.push(`/test-application/success?id=${applicationId}`);
       }
     } catch (error) {
-      setIsSubmitting(false);
-      console.error('❌ handleStepComplete error:', error);
+      setIsSubmitting(false); 
       alert(`Error: ${error instanceof Error ? error.message : 'Unknown'}`);
     }
   };

@@ -15,7 +15,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    console.log('📝 Updating rules acknowledgment...');
+   
 
     const authSupabase = await createClient();
     const { data: { user }, error: authError } = await authSupabase.auth.getUser();
@@ -52,7 +52,6 @@ export async function PATCH(
       );
     }
 
-    console.log('✅ Rules quiz saved to rules_quiz_answers JSONB');
 
     return NextResponse.json({
       success: true,
@@ -60,7 +59,7 @@ export async function PATCH(
     });
 
   } catch (error) {
-    console.error('❌ Update rules error:', error);
+
     return NextResponse.json(
       { error: 'Failed to update rules' },
       { status: 500 }

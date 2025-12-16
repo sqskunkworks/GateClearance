@@ -22,7 +22,7 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      console.log('📝 Attempting signup with:', email);
+  
 
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -34,27 +34,19 @@ export default function SignupPage() {
         },
       });
 
-      console.log('📊 Signup response:', {
-        hasError: !!error,
-        errorMessage: error?.message,
-        hasUser: !!data?.user,
-        hasSession: !!data?.session,
-        userId: data?.user?.id
-      });
+
 
       if (error) {
-        console.error('❌ Supabase error:', error);
         throw error;
       }
 
-      console.log('✅ Signup successful');
+
 
       // Show email confirmation message
       alert('✅ Account created! Please check your email to confirm your account before signing in.');
 
       router.push('/auth/login');
     } catch (err: any) {
-      console.error('❌ Signup error:', err);
       setError(err.message || 'Failed to create account');
     } finally {
       setLoading(false);

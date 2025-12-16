@@ -15,7 +15,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    console.log('📝 Updating experience data...');
+
 
     const authSupabase = await createClient();
     const { data: { user }, error: authError } = await authSupabase.auth.getUser();
@@ -53,7 +53,7 @@ export async function PATCH(
       );
     }
 
-    console.log('✅ Experience data saved to impact_responses JSONB');
+    
 
     return NextResponse.json({
       success: true,
@@ -61,7 +61,7 @@ export async function PATCH(
     });
 
   } catch (error) {
-    console.error('❌ Update experience error:', error);
+   
     return NextResponse.json(
       { error: 'Failed to update experience' },
       { status: 500 }

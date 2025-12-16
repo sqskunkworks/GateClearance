@@ -1,4 +1,5 @@
 
+
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
@@ -22,7 +23,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    console.log('📝 Updating security info...');
+   
 
     const authSupabase = await createClient();
     const { data: { user }, error: authError } = await authSupabase.auth.getUser();
@@ -34,30 +35,21 @@ export async function PATCH(
     const { id } = await params;
     const body = await req.json();
 
-    console.log('📥 Security data received:', {
-      governmentIdType: body.governmentIdType,
-      hasIdNumber: !!body.governmentIdNumber,
-      idExpiration: body.idExpiration,
-    });
-
    
+
     const updateData: any = {
       government_id_type: body.governmentIdType,
       government_id_number: body.governmentIdNumber,
       id_state: body.idState || null,
-      id_expiration: convertToDBDate(body.idExpiration), // ✅ Convert date
+      id_expiration: convertToDBDate(body.idExpiration),
       digital_signature: body.digitalSignature || null,
       
-      // Background questions
       former_inmate: body.formerInmate === 'yes',
       on_probation_parole: body.onParole === 'yes',
       
       updated_at: new Date().toISOString(),
     };
 
-    console.log('💾 Saving with converted date:', {
-      id_expiration: updateData.id_expiration,
-    });
 
     const { error } = await supabase
       .from('applications')
@@ -73,7 +65,7 @@ export async function PATCH(
       );
     }
 
-    console.log('✅ Security info updated');
+  
 
     return NextResponse.json({
       success: true,

@@ -1,8 +1,7 @@
-
-
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { DRAFT_PLACEHOLDERS } from '@/lib/constants';
 
 export const runtime = 'nodejs';
 
@@ -12,23 +11,14 @@ const supabase = createSupabaseClient(
   { auth: { persistSession: false, autoRefreshToken: false } }
 );
 
-// Helper: Convert form date )
 const convertToDBDate = (formDate: string): string => {
-  console.log('🔄 Converting date:', formDate);
-  if (!formDate) {
-    console.log('⚠️ Empty date received');
-    return '';
-  }
+  if (!formDate) return '';
   const [month, day, year] = formDate.split('-');
-  const dbDate = `${year}-${month}-${day}`;
-  console.log('✅ Converted to:', dbDate);
-  return dbDate;
+  return `${year}-${month}-${day}`;
 };
 
 export async function POST(req: Request) {
   try {
-    console.log('\n=== CREATE DRAFT STARTED ===');
-
     const authSupabase = await createClient();
     const { data: { user }, error: authError } = await authSupabase.auth.getUser();
 
@@ -37,55 +27,42 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    console.log('📥 Received body:', JSON.stringify(body, null, 2));
-
     const { applicationId, ...formData } = body;
 
-    // Validate Step 1 data
     const requiredFields = ['firstName', 'lastName', 'dateOfBirth', 'gender'];
     const missing = requiredFields.filter(f => !formData[f]);
 
     if (missing.length > 0) {
-      console.log('❌ Missing fields:', missing);
       return NextResponse.json(
         { error: `Missing required fields: ${missing.join(', ')}` },
         { status: 400 }
       );
     }
 
-    const convertedDOB = convertToDBDate(formData.dateOfBirth);
-    console.log('📅 Date conversion result:', {
-      input: formData.dateOfBirth,
-      output: convertedDOB,
-    });
-
-   
     const draftData = {
       id: applicationId,
       user_id: user.id,
       
-      // Step 1: Personal (REAL data)
+      // Step 1: Personal info (real data)
       first_name: formData.firstName,
       last_name: formData.lastName,
       other_names: formData.otherNames || null,
-      date_of_birth: convertedDOB,
+      date_of_birth: convertToDBDate(formData.dateOfBirth),
       gender: formData.gender,
       
-      // Step 2: Contact (DUMMY)
-      email: 'pending@example.com',
-      phone_number: '0000000000',
-      company_or_organization: 'PENDING',
+      // Step 2: Contact (placeholders - updated via PATCH in Step 2)
+      email: DRAFT_PLACEHOLDERS.EMAIL,
+      phone_number: DRAFT_PLACEHOLDERS.PHONE,
+      company_or_organization: DRAFT_PLACEHOLDERS.COMPANY,
       purpose_of_visit: null,
       
-      // Step 5: Security (DUMMY)
-      government_id_type: 'driver_license',
-      government_id_number: 'PENDING',
+      // Step 5: Security (placeholders - replaced on final submit)
+      government_id_type: DRAFT_PLACEHOLDERS.GOV_ID_TYPE,
+      government_id_number: DRAFT_PLACEHOLDERS.GOV_ID_NUMBER,
       
-      // System fields
       authorization_type: 'gate_clearance',
       status: 'draft',
       
-      // Initialize boolean fields
       visited_inmate: false,
       former_inmate: false,
       restricted_access: false,
@@ -94,8 +71,6 @@ export async function POST(req: Request) {
       pending_charges: false,
     };
 
-    console.log('💾 About to insert:', JSON.stringify(draftData, null, 2));
-
     const { data, error } = await supabase
       .from('applications')
       .insert(draftData)
@@ -103,16 +78,12 @@ export async function POST(req: Request) {
       .single();
 
     if (error) {
-      console.error('❌ DB INSERT ERROR:', error);
+      console.error('Draft creation error:', error);
       return NextResponse.json(
         { error: `Failed to create draft: ${error.message}` },
         { status: 500 }
       );
     }
-
-    console.log('✅ Draft created successfully:', data.id);
-    console.log('✅ Stored date_of_birth:', data.date_of_birth);
-    console.log('=== CREATE DRAFT COMPLETED ===\n');
 
     return NextResponse.json({
       success: true,
@@ -121,7 +92,7 @@ export async function POST(req: Request) {
     });
 
   } catch (error) {
-    console.error('❌ CREATE DRAFT EXCEPTION:', error);
+
     return NextResponse.json(
       { error: 'Failed to create draft', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }

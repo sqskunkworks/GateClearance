@@ -26,7 +26,7 @@ export async function uploadPDFToDrive(
   filename: string
 ): Promise<{ fileId: string; webViewLink: string }> {
   try {
-    console.log('📤 Uploading PDF to Google Drive:', filename);
+
 
     const drive = getDriveClient();
     const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID!;
@@ -49,12 +49,9 @@ export async function uploadPDFToDrive(
     const fileId = response.data.id!;
     const webViewLink = response.data.webViewLink!;
 
-    console.log('✅ PDF uploaded successfully!');
-    console.log('   File ID:', fileId);
-
     return { fileId, webViewLink };
   } catch (error: any) {
-    console.error('❌ Upload failed:', error.message);
+
     
     if (error.code === 403 && error.message.includes('Service Accounts do not have storage quota')) {
       throw new Error(
@@ -73,10 +70,10 @@ export async function deleteFileFromDrive(fileId: string): Promise<void> {
     await drive.files.delete({ 
       fileId,
       supportsAllDrives: true,
-    });
-    console.log('✅ File deleted');
+    })
+
   } catch (error: any) {
-    console.error('❌ Delete failed:', error.message);
+
     throw error;
   }
 }
