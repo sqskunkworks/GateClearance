@@ -1,6 +1,3 @@
-// ============================================
-// FILE: lib/validation/applicationSchema.ts - OLD ZOD COMPATIBLE
-// ============================================
 import { z } from 'zod';
 
 // Helper validators
@@ -26,6 +23,19 @@ const isFutureDate = (dateStr: string) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return date >= today;
+};
+
+
+const isExpiringWithin30Days = (dateStr: string) => {
+  if (!isValidDate(dateStr)) return false;
+  const [mm, dd, yyyy] = dateStr.split('-').map(Number);
+  const expirationDate = new Date(yyyy, mm - 1, dd);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const thirtyDaysFromNow = new Date(today);
+  thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+  
+  return expirationDate < thirtyDaysFromNow;
 };
 
 // ============================================
@@ -227,6 +237,7 @@ export const securitySchema = z
         isFutureDate,
         'Your ID has expired. Please renew it before submitting this application'
       ),
+      passportScan: z.instanceof(File).optional(),
     
     ssnMethod: z.enum(['direct', 'call', 'split']),
     
@@ -348,7 +359,53 @@ export const securitySchema = z
       message: 'Please upload a letter from the Warden (required for former inmates)',
       path: ['wardenLetter'],
     }
-  );
+  )// After the wardenLetter refinement, add these 4 new refinements:
+
+.refine(
+  (data) => {
+    return !isExpiringWithin30Days(data.idExpiration);
+  },
+  {
+    message: 'Your ID must be valid for at least 30 days. Please renew your ID before applying.',
+    path: ['idExpiration'],
+  }
+)
+.refine(
+  (data) => {
+    if (data.governmentIdType === 'passport') {
+      return data.passportScan instanceof File;
+    }
+    return true;
+  },
+  {
+    message: 'Please upload a scan of your passport (required for passport holders)',
+    path: ['passportScan'],
+  }
+)
+.refine(
+  (data) => {
+    if (data.passportScan instanceof File) {
+      return data.passportScan.size <= 5 * 1024 * 1024; // 5MB
+    }
+    return true;
+  },
+  {
+    message: 'Passport scan must be less than 5MB',
+    path: ['passportScan'],
+  }
+)
+.refine(
+  (data) => {
+    if (data.passportScan instanceof File) {
+      return data.passportScan.type === 'application/pdf';
+    }
+    return true;
+  },
+  {
+    message: 'Passport scan must be a PDF file',
+    path: ['passportScan'],
+  }
+);
 
 // ============================================
 // FULL APPLICATION SCHEMA

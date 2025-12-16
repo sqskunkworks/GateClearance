@@ -1,6 +1,4 @@
-// ============================================
-// FILE 2: components/SectionForm.tsx (Updated with Zod)
-// ============================================
+
 'use client';
 
 import React, { useMemo, useState, useRef, useEffect } from 'react';
@@ -45,7 +43,7 @@ export type SectionConfig = {
   subtitle?: string;
   icon?: React.ReactNode;
   fields: Field[];
-  zodSchema: z.ZodType<any>; // ✅ Zod schema for validation
+  zodSchema: z.ZodType<any>; 
   ctaLabel?: string;
   columns?: 1 | 2;
 };
@@ -190,7 +188,6 @@ useEffect(() => {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
-  // ✅ Zod validation
   const zodErrors = useMemo(() => {
     const result = config.zodSchema.safeParse(values);
     if (result.success) return {};
@@ -242,13 +239,13 @@ useEffect(() => {
     setTouched((prev) => {
       const newTouched = { ...prev, [fieldName]: true };
       
-      // ✅ For confirmation fields, also mark the original field as touched
+      // For confirmation fields, also mark the original field as touched
       if (fieldName.endsWith('Confirm')) {
         const originalField = fieldName.replace('Confirm', '');
         newTouched[originalField] = true;
       }
       
-      // ✅ If this field has a confirmation field, mark it as touched too
+      // If this field has a confirmation field, mark it as touched too
       const confirmField = `${fieldName}Confirm`;
       if (config.fields.some(f => f.name === confirmField) && prev[confirmField]) {
         newTouched[confirmField] = true;

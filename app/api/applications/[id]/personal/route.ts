@@ -1,4 +1,4 @@
-// FILE: /api/applications/[id]/personal/route.ts
+
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
@@ -12,7 +12,6 @@ const supabase = createSupabaseClient(
   { auth: { persistSession: false, autoRefreshToken: false } }
 );
 
-// Helper: Convert form date (MM-DD-YYYY) to DB date (YYYY-MM-DD)
 const convertToDBDate = (formDate: string): string => {
   if (!formDate) return '';
   const [month, day, year] = formDate.split('-');
@@ -36,12 +35,12 @@ export async function PATCH(
     const { id } = await params;
     const body = await req.json();
 
-    // Update Step 1 data - CONVERT DATE
+  
     const updateData: any = {
       first_name: body.firstName,
       last_name: body.lastName,
       other_names: body.otherNames || null,
-      date_of_birth: convertToDBDate(body.dateOfBirth), // ✅ Convert to DB format
+      date_of_birth: convertToDBDate(body.dateOfBirth), 
       gender: body.gender,
       updated_at: new Date().toISOString(),
     };

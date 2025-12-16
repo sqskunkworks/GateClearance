@@ -161,8 +161,6 @@ export default function StepPage() {
 
       if (currentStep === 2) {
         console.log('💾 Step 2: Updating contact...');
-        
-        // ✅ Save visit date to sessionStorage (not DB)
         const visitDate = updatedFormData.visitDate || updatedFormData.preferredVisitDate;
         if (visitDate) {
           sessionStorage.setItem(`app_${applicationId}_visitDate`, visitDate);
@@ -230,36 +228,59 @@ export default function StepPage() {
       }
 
       if (currentStep === 5) {
-        setIsSubmitting(true); // ✅ Start loading
+        setIsSubmitting(true);
         console.log('💾 Step 5: Saving security info first...');
-
+      
+        // First, save non-file security data via JSON
+        const securityDataWithoutFiles = { ...updatedFormData };
+        delete securityDataWithoutFiles.passportScan;
+        delete securityDataWithoutFiles.wardenLetter;
+      
         const securityResponse = await fetch(`/api/applications/${applicationId}/security`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedFormData),
+          body: JSON.stringify(securityDataWithoutFiles),
         });
-
+      
         if (!securityResponse.ok) {
           const result = await securityResponse.json();
           console.error('❌ Security update failed:', result);
           setIsSubmitting(false);
           throw new Error(result.error);
         }
-
-        console.log('✅ Security saved, now submitting...');
-
+      
+        console.log('✅ Security saved, now submitting with FormData...');
+      
+        // ✅ Use FormData for final submit (includes files)
+        const formData = new FormData();
+        
+        // Add applicationId
+        formData.append('applicationId', applicationId);
+        
+        // Add all form fields
+        Object.keys(updatedFormData).forEach((key) => {
+          const value = updatedFormData[key];
+          
+          if (value instanceof File) {
+            // Add files directly
+            formData.append(key, value);
+            console.log(`📎 Added file: ${key} (${value.name})`);
+          } else if (value !== null && value !== undefined) {
+            // Add regular fields as strings
+            formData.append(key, String(value));
+          }
+        });
+      
+        console.log('📤 Submitting with FormData...');
+      
         const submitResponse = await fetch('/api/applications/submit', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            applicationId,
-            ...updatedFormData,
-          }),
+          body: formData, // ✅ Send FormData (no Content-Type header needed)
         });
-
+      
         const submitResult = await submitResponse.json();
         console.log('📡 Submit response:', { status: submitResponse.status, submitResult });
-
+      
         if (!submitResponse.ok) {
           setIsSubmitting(false);
           if (submitResult.allErrors) {
@@ -272,13 +293,9 @@ export default function StepPage() {
           }
           return;
         }
-
+      
         console.log('✅ Submitted successfully');
-        
-        // ✅ Clear sessionStorage after successful submit
         sessionStorage.removeItem(`app_${applicationId}_visitDate`);
-        
-        // Don't set isSubmitting(false) - let success page show
         router.push(`/test-application/success?id=${applicationId}`);
       }
     } catch (error) {

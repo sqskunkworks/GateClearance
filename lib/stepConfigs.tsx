@@ -1,5 +1,5 @@
 // ============================================
-// FILE: lib/stepConfigs.tsx (must be .tsx not .ts!)
+// FILE: lib/stepConfigs.tsx
 // ============================================
 import { Shield, User, Building2, FileText, Clipboard } from 'lucide-react';
 import type { SectionConfig } from '@/components/SectionForm';
@@ -329,6 +329,16 @@ export const securityConfig: SectionConfig = {
       required: true,
       placeholder: 'MM-DD-YYYY',
     },
+    {
+      kind: 'file',
+      name: 'passportScan',
+      label: 'Upload passport scan (PDF only)',
+      required: true,
+      accept: '.pdf',
+      showIf: (v) => v.governmentIdType === 'passport',
+      helpText: 'Required for passport holders. Maximum 5MB.',
+    },
+
     {
       kind: 'radio',
       name: 'ssnMethod',

@@ -1,4 +1,4 @@
-// FILE: /api/applications/create/route.ts - DEBUG VERSION
+
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
@@ -12,7 +12,7 @@ const supabase = createSupabaseClient(
   { auth: { persistSession: false, autoRefreshToken: false } }
 );
 
-// Helper: Convert form date (MM-DD-YYYY) to DB date (YYYY-MM-DD)
+// Helper: Convert form date )
 const convertToDBDate = (formDate: string): string => {
   console.log('🔄 Converting date:', formDate);
   if (!formDate) {
@@ -59,7 +59,7 @@ export async function POST(req: Request) {
       output: convertedDOB,
     });
 
-    // Create draft with Step 1 data + dummy values for NOT NULL fields
+   
     const draftData = {
       id: applicationId,
       user_id: user.id,

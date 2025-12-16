@@ -18,7 +18,6 @@ export default function LoginPage() {
 
   const supabase = createClient();
   console.log('🔍 Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
-  // Check for confirmation success or error
   useEffect(() => {
     const confirmed = searchParams.get('confirmed');
     const errorParam = searchParams.get('error');

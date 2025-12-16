@@ -31,10 +31,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await req.json();
-    const { applicationId, ...formData } = body;
 
-    console.log('📥 Submit data received:', { applicationId, hasFormData: !!formData });
+    const formData = await req.formData();
+    console.log('📥 Received FormData');
+
+    // Extract applicationId
+    const applicationId = formData.get('applicationId') as string;
+    if (!applicationId) {
+      return NextResponse.json({ error: 'Application ID is required' }, { status: 400 });
+    }
+
+    console.log('📥 Application ID:', applicationId);
 
     // Load existing draft
     const { data: existingDraft, error: loadError } = await supabase
@@ -51,19 +58,33 @@ export async function POST(req: Request) {
 
     console.log('✅ Loaded existing draft');
 
-    // Include applicationId in validation data
+    //  Convert FormData to object for validation
+const formDataObj: Record<string, any> = {};
+
+// Fields that should be boolean
+const booleanFields = ['acknowledgmentAgreement', 'confirmAccuracy', 'consentToDataUse'];
+
+for (const [key, value] of formData.entries()) {
+  if (value instanceof File) {
+    formDataObj[key] = value;
+  } else {
+    if (booleanFields.includes(key)) {
+      formDataObj[key] = value === 'true';
+    } else {
+      formDataObj[key] = value;
+    }
+  }
+}
+
+    console.log('📋 Form fields:', Object.keys(formDataObj));
+
+    // Prepare validation data
     const dataForValidation = {
       applicationId,
-      ...formData,
-      dateOfBirth: formData.dateOfBirth, // Keep as MM-DD-YYYY for validation
-      idExpiration: formData.idExpiration, // Keep as MM-DD-YYYY for validation
+      ...formDataObj,
     };
 
-    console.log('🔍 Validating with dates:', {
-      applicationId: dataForValidation.applicationId,
-      dateOfBirth: dataForValidation.dateOfBirth,
-      idExpiration: dataForValidation.idExpiration,
-    });
+    console.log('🔍 Validating...');
 
     // Validate all data
     const validationResult = validateFullApplication(dataForValidation);
@@ -88,9 +109,9 @@ export async function POST(req: Request) {
     console.log('✅ Validation passed');
 
     // Check for dummy values
-    if (formData.governmentIdNumber === 'PENDING' || 
-        formData.email === 'pending@example.com' ||
-        formData.phoneNumber === '0000000000') {
+    if (formDataObj.governmentIdNumber === 'PENDING' || 
+        formDataObj.email === 'pending@example.com' ||
+        formDataObj.phoneNumber === '0000000000') {
       return NextResponse.json(
         { error: 'Please complete all required fields before submitting' },
         { status: 400 }
@@ -104,28 +125,28 @@ export async function POST(req: Request) {
 
     const updateData: any = {
       // Step 1
-      first_name: formData.firstName,
-      last_name: formData.lastName,
-      other_names: formData.otherNames || null,
-      date_of_birth: convertToDBDate(formData.dateOfBirth),
-      gender: formData.gender,
+      first_name: formDataObj.firstName,
+      last_name: formDataObj.lastName,
+      other_names: formDataObj.otherNames || null,
+      date_of_birth: convertToDBDate(formDataObj.dateOfBirth),
+      gender: formDataObj.gender,
 
       // Step 2
-      email: formData.email,
-      phone_number: formData.phoneNumber,
-      company_or_organization: formData.companyOrOrganization,
-      purpose_of_visit: formData.purposeOfVisit || null,
+      email: formDataObj.email,
+      phone_number: formDataObj.phoneNumber,
+      company_or_organization: formDataObj.companyOrOrganization,
+      purpose_of_visit: formDataObj.purposeOfVisit || null,
 
       // Step 5
-      government_id_type: formData.governmentIdType,
-      government_id_number: formData.governmentIdNumber,
-      id_state: formData.idState || null,
-      id_expiration: convertToDBDate(formData.idExpiration),
-      digital_signature: formData.digitalSignature,
+      government_id_type: formDataObj.governmentIdType,
+      government_id_number: formDataObj.governmentIdNumber,
+      id_state: formDataObj.idState || null,
+      id_expiration: convertToDBDate(formDataObj.idExpiration),
+      digital_signature: formDataObj.digitalSignature,
       
       // Background
-      former_inmate: formData.formerInmate === 'yes',
-      on_probation_parole: formData.onParole === 'yes',
+      former_inmate: formDataObj.formerInmate === 'yes',
+      on_probation_parole: formDataObj.onParole === 'yes',
       
       // Status
       status: 'submitted',
@@ -155,27 +176,27 @@ export async function POST(req: Request) {
     console.log('📄 Generating PDF...');
 
     const pdfRecord: AppRecord = {
-      first_name: formData.firstName,
-      last_name: formData.lastName,
-      other_names: formData.otherNames || '',
-      date_of_birth: formData.dateOfBirth, // Keep MM-DD-YYYY for PDF
-      phone_number: formData.phoneNumber,
-      email: formData.email,
-      company: formData.companyOrOrganization,
-      purpose_of_visit: formData.purposeOfVisit || '',
-      gender: formData.gender,
-      gov_id_type: formData.governmentIdType,
-      gov_id_number: formData.governmentIdNumber,
-      id_state: formData.idState || '',
-      id_expiration: formData.idExpiration, // Keep MM-DD-YYYY for PDF
-      signature_data_url: formData.digitalSignature,
+      first_name: formDataObj.firstName,
+      last_name: formDataObj.lastName,
+      other_names: formDataObj.otherNames || '',
+      date_of_birth: formDataObj.dateOfBirth,
+      phone_number: formDataObj.phoneNumber,
+      email: formDataObj.email,
+      company: formDataObj.companyOrOrganization,
+      purpose_of_visit: formDataObj.purposeOfVisit || '',
+      gender: formDataObj.gender,
+      gov_id_type: formDataObj.governmentIdType,
+      gov_id_number: formDataObj.governmentIdNumber,
+      id_state: formDataObj.idState || '',
+      id_expiration: formDataObj.idExpiration,
+      signature_data_url: formDataObj.digitalSignature,
       visited_inmate: false,
-      former_inmate: formData.formerInmate === 'yes',
+      former_inmate: formDataObj.formerInmate === 'yes',
       restricted_access: false,
       felony_conviction: false,
-      on_probation_parole: formData.onParole === 'yes',
+      on_probation_parole: formDataObj.onParole === 'yes',
       pending_charges: false,
-      ssn_full: formData.ssnFull || formData.ssnFirstFive || undefined,
+      ssn_full: formDataObj.ssnFull || formDataObj.ssnFirstFive || undefined,
     };
 
     const pdfDoc = await loadBlank2311();
@@ -187,16 +208,16 @@ export async function POST(req: Request) {
     // ========================================
     // UPLOAD TO GOOGLE DRIVE
     // ========================================
-    console.log('📤 Uploading to Google Drive...');
+    console.log('📤 Uploading application PDF to Google Drive...');
 
-    const filename = `CDCR_2311_${formData.firstName}_${formData.lastName}_${applicationId}.pdf`;
+    const filename = `CDCR_2311_${formDataObj.firstName}_${formDataObj.lastName}_${applicationId}.pdf`;
     
     const { fileId } = await uploadPDFToDrive(
       Buffer.from(pdfBytes),
       filename
     );
 
-    console.log('✅ Uploaded to Drive, File ID:', fileId);
+    console.log('✅ Application PDF uploaded, File ID:', fileId);
 
     // ========================================
     // SAVE DOCUMENT METADATA
@@ -220,6 +241,89 @@ export async function POST(req: Request) {
       console.log('✅ Document metadata saved');
     }
 
+    // ========================================
+    // UPLOAD PASSPORT SCAN (IF PROVIDED)
+    // ========================================
+    const passportScanFile = formData.get('passportScan') as File | null;
+    
+    if (formDataObj.governmentIdType === 'passport' && passportScanFile instanceof File) {
+      console.log('📤 Uploading passport scan...');
+      
+      try {
+        const passportBuffer = Buffer.from(await passportScanFile.arrayBuffer());
+        const passportFilename = `Passport_${formDataObj.firstName}_${formDataObj.lastName}_${applicationId}.pdf`;
+        
+        const { fileId: passportFileId } = await uploadPDFToDrive(
+          passportBuffer,
+          passportFilename
+        );
+        
+        console.log('✅ Passport scan uploaded, File ID:', passportFileId);
+        
+        // Save passport document metadata
+        const { error: passportDocError } = await supabase
+          .from('documents')
+          .insert({
+            application_id: applicationId,
+            filename: passportFilename,
+            url: ' ',
+            mime_type: 'application/pdf',
+            size_bytes: passportBuffer.length,
+            uploaded_by_user_id: user.id,
+          });
+        
+        if (passportDocError) {
+          console.error('⚠️ Passport document metadata error:', passportDocError);
+        } else {
+          console.log('✅ Passport document metadata saved');
+        }
+      } catch (passportError) {
+        console.error('❌ Passport upload error:', passportError);
+      }
+    }
+
+    // ========================================
+    // UPLOAD WARDEN LETTER (IF PROVIDED)
+    // ========================================
+    const wardenLetterFile = formData.get('wardenLetter') as File | null;
+    
+    if (formDataObj.formerInmate === 'yes' && wardenLetterFile instanceof File) {
+      console.log('📤 Uploading warden letter...');
+      
+      try {
+        const wardenBuffer = Buffer.from(await wardenLetterFile.arrayBuffer());
+        const extension = wardenLetterFile.type.includes('pdf') ? 'pdf' : 'jpg';
+        const wardenFilename = `WardenLetter_${formDataObj.firstName}_${formDataObj.lastName}_${applicationId}.${extension}`;
+        
+        const { fileId: wardenFileId } = await uploadPDFToDrive(
+          wardenBuffer,
+          wardenFilename
+        );
+        
+        console.log('✅ Warden letter uploaded, File ID:', wardenFileId);
+        
+        // Save warden letter metadata
+        const { error: wardenDocError } = await supabase
+          .from('documents')
+          .insert({
+            application_id: applicationId,
+            filename: wardenFilename,
+            url: ' ',
+            mime_type: wardenLetterFile.type,
+            size_bytes: wardenBuffer.length,
+            uploaded_by_user_id: user.id,
+          });
+        
+        if (wardenDocError) {
+          console.error('⚠️ Warden letter metadata error:', wardenDocError);
+        } else {
+          console.log('✅ Warden letter metadata saved');
+        }
+      } catch (wardenError) {
+        console.error('❌ Warden letter upload error:', wardenError);
+      }
+    }
+
     console.log('✅✅✅ APPLICATION SUBMISSION COMPLETE');
     console.log('=== FINAL SUBMIT COMPLETED ===\n');
 
@@ -241,5 +345,4 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
- }
-
+}

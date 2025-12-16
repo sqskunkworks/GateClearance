@@ -55,7 +55,6 @@ import {
     // Contact
     phoneNumber: text("phone_number").notNull(),
   
-    // From Google Form (per PR)
     companyOrOrganization: text("company_or_organization").notNull(),
     purposeOfVisit: text("purpose_of_visit"),
   
@@ -77,7 +76,6 @@ import {
     pendingCharges: boolean("pending_charges").notNull().default(false),
     impactResponses: jsonb("impact_responses"),
     rulesQuizAnswers: jsonb("rules_quiz_answers"),
-    // Digital signature (per PR)
     digitalSignature: text("digital_signature"),
   
     // Lifecycle (keep if already in your codebase)
@@ -97,9 +95,7 @@ import {
     id: uuid("id").defaultRandom().primaryKey(),
     applicationId: uuid("application_id")
       .notNull()
-      .references(() => applications.id, { onDelete: "cascade" }), // FK to applications.id
-  
-    // File metadata (store actual file in object storage; keep URL/key here)
+      .references(() => applications.id, { onDelete: "cascade" }), 
     url: text("url").notNull(),
     filename: text("filename").notNull(),
     mimeType: text("mime_type"),

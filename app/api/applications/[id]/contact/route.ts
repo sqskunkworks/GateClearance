@@ -1,4 +1,4 @@
-// FILE: /api/applications/[id]/contact/route.ts
+
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
@@ -29,7 +29,7 @@ export async function PATCH(
     const { id } = await params;
     const body = await req.json();
 
-    // Update Step 2 data (non-sensitive) - NO visit_date
+    
     const updateData: any = {
       email: body.email,
       phone_number: body.phoneNumber,

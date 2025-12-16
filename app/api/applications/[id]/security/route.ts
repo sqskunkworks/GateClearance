@@ -1,4 +1,3 @@
-// FILE: /api/applications/[id]/security/route.ts - NEW FILE
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
@@ -12,7 +11,6 @@ const supabase = createSupabaseClient(
   { auth: { persistSession: false, autoRefreshToken: false } }
 );
 
-// Helper: Convert form date (MM-DD-YYYY) to DB date (YYYY-MM-DD)
 const convertToDBDate = (formDate: string): string | null => {
   if (!formDate) return null;
   const [month, day, year] = formDate.split('-');
@@ -42,7 +40,7 @@ export async function PATCH(
       idExpiration: body.idExpiration,
     });
 
-    // Update Step 5 data - Convert date
+   
     const updateData: any = {
       government_id_type: body.governmentIdType,
       government_id_number: body.governmentIdNumber,

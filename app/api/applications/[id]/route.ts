@@ -1,4 +1,4 @@
-// FILE: /api/applications/[id]/route.ts - CLEAN VERSION
+
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
@@ -69,8 +69,6 @@ export async function GET(
     console.log('  submitted_at:', data.submitted_at);
     console.log('  former_inmate:', data.former_inmate);
     console.log('  on_probation_parole:', data.on_probation_parole);
-
-    // ✅ FIX: Check if this is a NEW draft (not yet filled out Step 5)
     const isNewDraft = data.status === 'draft' && !data.submitted_at;
 
     // Transform to form format
@@ -87,7 +85,7 @@ export async function GET(
       phoneNumber: isDummy(data.phone_number, '0000000000') ? '' : data.phone_number,
       companyOrOrganization: isDummy(data.company_or_organization, 'PENDING') ? '' : data.company_or_organization,
       purposeOfVisit: data.purpose_of_visit || '',
-      // ✅ Visit date handled by sessionStorage in frontend
+    
 
       // Step 3: Experience (from JSONB)
       ...(data.impact_responses || {}),
@@ -103,7 +101,7 @@ export async function GET(
       idExpiration: convertToFormDate(data.id_expiration),
       digitalSignature: data.digital_signature || '',
       
-      // ✅ FIX: Background questions - empty for new drafts, yes/no for saved drafts
+    
       formerInmate: isNewDraft ? '' : (data.former_inmate ? 'yes' : 'no'),
       onParole: isNewDraft ? '' : (data.on_probation_parole ? 'yes' : 'no'),
     };

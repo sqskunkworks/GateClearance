@@ -27,7 +27,6 @@ export async function PATCH(
     const { id } = await params;
     const body = await req.json();
 
-    // Store Step 3 data in JSONB column
     const impactResponsesData = {
       engagedDirectly: body.engagedDirectly,
       perceptions: body.perceptions,

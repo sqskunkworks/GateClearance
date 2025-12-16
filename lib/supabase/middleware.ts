@@ -54,7 +54,7 @@ export async function updateSession(request: NextRequest) {
     willRedirect: isProtectedPath && !isAuthenticated
   });
 
-  // Redirect to login if trying to access protected route without auth
+  
   if (isProtectedPath && !isAuthenticated) {
     console.log('🚫 Redirecting to login - not authenticated');
     const url = request.nextUrl.clone();
@@ -63,7 +63,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Redirect to app if trying to access auth pages while logged in
+  
   if (isAuthPath && isAuthenticated) {
     console.log('🔄 Redirecting to app - already authenticated');
     const url = request.nextUrl.clone();
