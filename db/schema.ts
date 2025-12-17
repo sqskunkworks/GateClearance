@@ -77,12 +77,10 @@ import {
     impactResponses: jsonb("impact_responses"),
     rulesQuizAnswers: jsonb("rules_quiz_answers"),
     digitalSignature: text("digital_signature"),
-  
-    // Lifecycle (keep if already in your codebase)
+
     status: appStatusEnum("status").notNull().default("draft"),
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
   
-    // Timestamps
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   });

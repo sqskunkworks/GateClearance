@@ -78,7 +78,7 @@ export async function POST(req: Request) {
       .single();
 
     if (error) {
-      console.error('Draft creation error:', error);
+
       return NextResponse.json(
         { error: `Failed to create draft: ${error.message}` },
         { status: 500 }

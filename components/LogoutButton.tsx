@@ -17,7 +17,6 @@ export function LogoutButton() {
       router.push('/auth/login');
       router.refresh();
     } catch (error) {
-      console.error('Logout error:', error);
     } finally {
       setLoading(false);
     }

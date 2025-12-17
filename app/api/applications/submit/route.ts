@@ -22,8 +22,6 @@ const convertToDBDate = (formDate: string): string | null => {
 
 export async function POST(req: Request) {
   try {
-
-
     const authSupabase = await createClient();
     const { data: { user }, error: authError } = await authSupabase.auth.getUser();
 
@@ -33,13 +31,10 @@ export async function POST(req: Request) {
 
     const formData = await req.formData();
 
-
     const applicationId = formData.get('applicationId') as string;
     if (!applicationId) {
       return NextResponse.json({ error: 'Application ID is required' }, { status: 400 });
     }
-
-
 
     const { data: existingDraft, error: loadError } = await supabase
       .from('applications')
@@ -51,8 +46,6 @@ export async function POST(req: Request) {
     if (loadError) {
       return NextResponse.json({ error: 'Draft not found' }, { status: 404 });
     }
-
-
 
     const formDataObj: Record<string, any> = {};
     const booleanFields = ['acknowledgmentAgreement', 'confirmAccuracy', 'consentToDataUse'];
@@ -69,19 +62,14 @@ export async function POST(req: Request) {
       }
     }
 
-
     const dataForValidation = {
       applicationId,
       ...formDataObj,
     };
 
-
-
     const validationResult = validateFullApplication(dataForValidation);
 
     if (!validationResult.success) {
-     
-      
       const allErrors = validationResult.error.issues.map((err: any) => ({
         field: err.path.join('.'),
         message: err.message,
@@ -95,8 +83,6 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
-
-
 
     if (isPlaceholder(formDataObj.governmentIdNumber, DRAFT_PLACEHOLDERS.GOV_ID_NUMBER) ||
         isPlaceholder(formDataObj.email, DRAFT_PLACEHOLDERS.EMAIL) ||
@@ -140,13 +126,11 @@ export async function POST(req: Request) {
       .eq('user_id', user.id);
 
     if (updateError) {
-    
       return NextResponse.json(
         { error: `Failed to submit: ${updateError.message}` },
         { status: 500 }
       );
     }
-
 
     const pdfRecord: AppRecord = {
       first_name: formDataObj.firstName,
@@ -175,92 +159,68 @@ export async function POST(req: Request) {
     const pdfDoc = await loadBlank2311();
     await fill2311(pdfDoc, pdfRecord);
     const pdfBytes = await pdfDoc.save();
-
     
     const filename = `CDCR_2311_${formDataObj.firstName}_${formDataObj.lastName}_${applicationId}.pdf`;
     
-    const { fileId } = await uploadPDFToDrive(
-      Buffer.from(pdfBytes),
-      filename
-    );
+    await uploadPDFToDrive(Buffer.from(pdfBytes), filename);
 
- 
-
-    const { error: docError } = await supabase
-      .from('documents')
-      .insert({
-        application_id: applicationId,
-        filename: filename,
-        url: ' ',
-        mime_type: 'application/pdf',
-        size_bytes: pdfBytes.length,
-        uploaded_by_user_id: user.id,
-      });
-
-  
+    await supabase.from('documents').insert({
+      application_id: applicationId,
+      filename: filename,
+      url: ' ',
+      mime_type: 'application/pdf',
+      size_bytes: pdfBytes.length,
+      uploaded_by_user_id: user.id,
+    });
 
     const passportScanFile = formData.get('passportScan') as File | null;
     
     if (formDataObj.governmentIdType === 'passport' && passportScanFile instanceof File) {
-  
-      
       try {
         const passportBuffer = Buffer.from(await passportScanFile.arrayBuffer());
-        const passportFilename = `Passport_${formDataObj.firstName}_${formDataObj.lastName}_${applicationId}.pdf`;
         
-        const { fileId: passportFileId } = await uploadPDFToDrive(
-          passportBuffer,
-          passportFilename
-        );
+        let extension = 'pdf';
+        if (passportScanFile.type === 'image/jpeg' || passportScanFile.type === 'image/jpg') {
+          extension = 'jpg';
+        } else if (passportScanFile.type === 'image/png') {
+          extension = 'png';
+        }
         
-
+        const passportFilename = `Passport_${formDataObj.firstName}_${formDataObj.lastName}_${applicationId}.${extension}`;
         
-        const { error: passportDocError } = await supabase
-          .from('documents')
-          .insert({
-            application_id: applicationId,
-            filename: passportFilename,
-            url: ' ',
-            mime_type: 'application/pdf',
-            size_bytes: passportBuffer.length,
-            uploaded_by_user_id: user.id,
-          });
+        await uploadPDFToDrive(passportBuffer, passportFilename);
         
+        await supabase.from('documents').insert({
+          application_id: applicationId,
+          filename: passportFilename,
+          url: ' ',
+          mime_type: passportScanFile.type,
+          size_bytes: passportBuffer.length,
+          uploaded_by_user_id: user.id,
+        });
       } catch (passportError) {
-        console.error('❌ Passport upload error:', passportError);
       }
     }
 
     const wardenLetterFile = formData.get('wardenLetter') as File | null;
     
     if (formDataObj.formerInmate === 'yes' && wardenLetterFile instanceof File) {
-
-      
       try {
         const wardenBuffer = Buffer.from(await wardenLetterFile.arrayBuffer());
         const extension = wardenLetterFile.type.includes('pdf') ? 'pdf' : 'jpg';
         const wardenFilename = `WardenLetter_${formDataObj.firstName}_${formDataObj.lastName}_${applicationId}.${extension}`;
         
-        const { fileId: wardenFileId } = await uploadPDFToDrive(
-          wardenBuffer,
-          wardenFilename
-        );
+        await uploadPDFToDrive(wardenBuffer, wardenFilename);
         
-        
-        const { error: wardenDocError } = await supabase
-          .from('documents')
-          .insert({
-            application_id: applicationId,
-            filename: wardenFilename,
-            url: ' ',
-            mime_type: wardenLetterFile.type,
-            size_bytes: wardenBuffer.length,
-            uploaded_by_user_id: user.id,
-          });
-        
-  
+        await supabase.from('documents').insert({
+          application_id: applicationId,
+          filename: wardenFilename,
+          url: ' ',
+          mime_type: wardenLetterFile.type,
+          size_bytes: wardenBuffer.length,
+          uploaded_by_user_id: user.id,
+        });
       } catch (wardenError) {
-        console.error('❌ Warden letter upload error:', wardenError);
       }
     }
 
@@ -271,8 +231,6 @@ export async function POST(req: Request) {
     });
 
   } catch (error) {
-    console.error('❌ Submit error:', error);
-    console.error('Stack:', error instanceof Error ? error.stack : 'No stack');
     
     return NextResponse.json(
       { 

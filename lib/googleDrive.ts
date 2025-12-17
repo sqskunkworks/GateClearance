@@ -4,7 +4,6 @@ import { Readable } from 'stream';
 const SCOPES = ['https://www.googleapis.com/auth/drive.file'];
 
 function getDriveClient() {
-  // Decode base64 private key
   const privateKey = Buffer.from(
     process.env.GOOGLE_PRIVATE_KEY_BASE64!,
     'base64'

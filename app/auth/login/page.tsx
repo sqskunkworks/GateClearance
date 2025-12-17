@@ -17,7 +17,6 @@ export default function LoginPage() {
   const redirectTo = searchParams.get('redirectTo') || '/test-application/1';
 
   const supabase = createClient();
-  console.log('🔍 Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
   useEffect(() => {
     const confirmed = searchParams.get('confirmed');
     const errorParam = searchParams.get('error');
@@ -37,8 +36,6 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      console.log('🔑 Attempting login with:', email);
-      
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -46,12 +43,10 @@ export default function LoginPage() {
 
  
       if (error) {
-        console.error('❌ Supabase error:', error);
         throw error;
       }
 
       if (!data.session) {
-        console.warn('⚠️ No session returned!');
         throw new Error('Unable to create session. Please try again or contact support.');
       }
 

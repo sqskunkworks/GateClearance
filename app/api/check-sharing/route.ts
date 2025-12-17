@@ -48,7 +48,6 @@ export async function GET() {
           (p: any) => p.emailAddress === serviceEmail
         );
       } catch (err: any) {
-        console.error('Cannot list permissions:', err.message);
       }
     }
 

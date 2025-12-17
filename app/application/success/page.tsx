@@ -28,7 +28,6 @@ export default function ApplicationSuccessPage() {
         .single();
 
       if (error || !data) {
-        console.error('Failed to fetch application:', error);
       } else {
         setApplication(data);
       }
@@ -65,7 +64,6 @@ export default function ApplicationSuccessPage() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
-      console.error('Download error:', error);
       alert('Failed to download PDF. Please try again.');
     }
   };

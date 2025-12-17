@@ -397,12 +397,13 @@ export const securitySchema = z
 .refine(
   (data) => {
     if (data.passportScan instanceof File) {
-      return data.passportScan.type === 'application/pdf';
+      const validTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+      return validTypes.includes(data.passportScan.type);
     }
     return true;
   },
   {
-    message: 'Passport scan must be a PDF file',
+    message: 'Passport scan must be a PDF, JPG, or PNG file',
     path: ['passportScan'],
   }
 );

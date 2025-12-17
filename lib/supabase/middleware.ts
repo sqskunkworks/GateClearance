@@ -34,13 +34,12 @@ export async function updateSession(request: NextRequest) {
 
   const isAuthenticated = user && !error;
 
-  // Protected routes
+
   const protectedPaths = ['/form', '/dashboard', '/profile', '/test-application'];
   const isProtectedPath = protectedPaths.some(path => 
     request.nextUrl.pathname.startsWith(path)
   );
 
-  // Auth routes
   const authPaths = ['/auth/login', '/auth/signup'];
   const isAuthPath = authPaths.some(path => 
     request.nextUrl.pathname.startsWith(path)

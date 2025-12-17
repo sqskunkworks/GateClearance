@@ -19,7 +19,7 @@ export default function SuccessPage() {
     fetch(`/api/applications/${applicationId}`)
       .then((res) => res.json())
       .then((data) => setApplication(data.draft))
-      .catch((err) => console.error('Error:', err));
+      .catch((err) => {});
   }, [applicationId, router]);
 
   if (!applicationId) {

@@ -20,15 +20,9 @@ export async function POST(req: Request) {
   
     
     const secret = req.headers.get('x-admin-secret');
-    
-    console.log('Environment check:', {
-      hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-      hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-      hasAdminSecret: !!ADMIN_SECRET,
-    });
+ 
 
     if (!ADMIN_SECRET || secret !== ADMIN_SECRET) {
-      console.error('❌ Unauthorized access attempt');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const body = await req.json();
@@ -45,7 +39,6 @@ export async function POST(req: Request) {
       .single();
 
     if (error) {
-      console.error('❌ Supabase error:', error);
       return NextResponse.json({ error: error.message, details: error }, { status: 500 });
     }
 
@@ -97,8 +90,6 @@ export async function POST(req: Request) {
       await fill2311(pdf, record);
 
     } catch (pdfErr) {
-      console.error('❌ PDF generation error:', pdfErr);
-      console.error('Stack trace:', pdfErr instanceof Error ? pdfErr.stack : 'N/A');
       return NextResponse.json(
         { 
           error: 'PDF generation failed', 
@@ -123,9 +114,6 @@ export async function POST(req: Request) {
     });
 
   } catch (err: unknown) {
-    console.error('Unhandled error in API route:', err);
-    console.error('Error type:', typeof err);
-    console.error('Stack trace:', err instanceof Error ? err.stack : 'N/A');
     const message = err instanceof Error ? err.message : 'Failed to generate PDF';
     return NextResponse.json({ 
       error: message,

@@ -1,9 +1,9 @@
 /**
  * Security endpoint for Step 5
  * 
- * This endpoint stores non-sensitive security fields (ID type, state, expiration)
- * immediately before submit. Sensitive fields (ID number, signature, background checks)
- * are only stored during the final submit via POST /api/applications/submit.
+ * This endpoint stores only non-sensitive security metadata (ID type, state, expiration)
+ * during draft saves. Sensitive fields (ID number, signature, background checks) are only
+ * written during final submission via POST /api/applications/submit.
  */
 
 import { NextResponse } from 'next/server';
@@ -29,8 +29,6 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-   
-
     const authSupabase = await createClient();
     const { data: { user }, error: authError } = await authSupabase.auth.getUser();
 
@@ -41,21 +39,12 @@ export async function PATCH(
     const { id } = await params;
     const body = await req.json();
 
-   
-
     const updateData: any = {
       government_id_type: body.governmentIdType,
-      government_id_number: body.governmentIdNumber,
       id_state: body.idState || null,
       id_expiration: convertToDBDate(body.idExpiration),
-      digital_signature: body.digitalSignature || null,
-      
-      former_inmate: body.formerInmate === 'yes',
-      on_probation_parole: body.onParole === 'yes',
-      
       updated_at: new Date().toISOString(),
     };
-
 
     const { error } = await supabase
       .from('applications')
@@ -64,14 +53,11 @@ export async function PATCH(
       .eq('user_id', user.id);
 
     if (error) {
-      console.error('❌ Update error:', error);
       return NextResponse.json(
         { error: `Failed to update: ${error.message}` },
         { status: 500 }
       );
     }
-
-  
 
     return NextResponse.json({
       success: true,
@@ -79,7 +65,6 @@ export async function PATCH(
     });
 
   } catch (error) {
-    console.error('❌ Update security error:', error);
     return NextResponse.json(
       { error: 'Failed to update security info' },
       { status: 500 }
