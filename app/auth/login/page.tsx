@@ -14,11 +14,9 @@ export default function LoginPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get('redirectTo') || '/test-application';
+  const redirectTo = searchParams.get('redirectTo') || '/test-application/1';
 
   const supabase = createClient();
-  console.log('🔍 Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
-  // Check for confirmation success or error
   useEffect(() => {
     const confirmed = searchParams.get('confirmed');
     const errorParam = searchParams.get('error');
@@ -38,37 +36,24 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      console.log('🔑 Attempting login with:', email);
-      
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-      console.log('📊 Login response:', {
-        hasError: !!error,
-        errorMessage: error?.message,
-        hasUser: !!data?.user,
-        hasSession: !!data?.session,
-        emailConfirmed: data?.user?.email_confirmed_at,
-        userId: data?.user?.id
-      });
-
+ 
       if (error) {
-        console.error('❌ Supabase error:', error);
         throw error;
       }
 
       if (!data.session) {
-        console.warn('⚠️ No session returned!');
         throw new Error('Unable to create session. Please try again or contact support.');
       }
 
-      console.log('✅ Login successful, redirecting to:', redirectTo);
+
       router.push(redirectTo);
       router.refresh();
     } catch (err: any) {
-      console.error('❌ Login error:', err);
       setError(err.message || 'Failed to sign in');
     } finally {
       setLoading(false);

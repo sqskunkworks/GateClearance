@@ -1,6 +1,3 @@
-// ============================================
-// FILE: lib/stepConfigs.tsx (must be .tsx not .ts!)
-// ============================================
 import { Shield, User, Building2, FileText, Clipboard } from 'lucide-react';
 import type { SectionConfig } from '@/components/SectionForm';
 import {
@@ -330,6 +327,15 @@ export const securityConfig: SectionConfig = {
       placeholder: 'MM-DD-YYYY',
     },
     {
+      name: 'passportScan',
+      label: 'Upload Passport Scan',
+      kind: 'file',  
+      required: true,
+      accept: '.pdf,.jpg,.jpeg,.png',
+      helpText: 'Please upload a clear scan of your passport (PDF, JPG, or PNG, max 5MB)',
+      showIf: (values: Record<string, any>) => values.governmentIdType === 'passport', 
+    },
+    {
       kind: 'radio',
       name: 'ssnMethod',
       label: 'How would you like to provide your SSN?',
@@ -385,12 +391,13 @@ export const securityConfig: SectionConfig = {
       ],
     },
     {
-      kind: 'file',
       name: 'wardenLetter',
-      label: 'Upload your letter to the Warden (PDF or image)',
+      label: 'Upload Letter from Warden',
+      kind: 'file', 
       required: true,
-      accept: '.pdf,image/*',
-      showIf: (v) => v.formerInmate === 'yes',
+      accept: '.pdf,.jpg,.jpeg,.png',
+      helpText: 'Please upload a letter from the Warden approving your visit (PDF, JPG, or PNG, max 5MB)',
+      showIf: (values: Record<string, any>) => values.formerInmate === 'yes',  // ← Changed from 'condition' to 'showIf'
     },
     {
       kind: 'radio',

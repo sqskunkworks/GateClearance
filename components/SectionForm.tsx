@@ -1,9 +1,7 @@
-// ============================================
-// FILE 2: components/SectionForm.tsx (Updated with Zod)
-// ============================================
+
 'use client';
 
-import React, { useMemo, useState, useRef } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, User, Building2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import SignaturePad, { SignaturePadHandle } from '@/components/SignaturePad';
@@ -45,7 +43,7 @@ export type SectionConfig = {
   subtitle?: string;
   icon?: React.ReactNode;
   fields: Field[];
-  zodSchema: z.ZodType<any>; // ✅ Zod schema for validation
+  zodSchema: z.ZodType<any>; 
   ctaLabel?: string;
   columns?: 1 | 2;
 };
@@ -180,11 +178,16 @@ export function SectionForm({
   onSubmit,
 }: SectionFormProps) {
   const [values, setValues] = useState<Record<string, any>>(initialValues || {});
+  // Update values when initialValues changes
+useEffect(() => {
+  if (initialValues) {
+    setValues(initialValues);
+  }
+}, [initialValues]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
-  // ✅ Zod validation
   const zodErrors = useMemo(() => {
     const result = config.zodSchema.safeParse(values);
     if (result.success) return {};
@@ -196,11 +199,18 @@ export function SectionForm({
     const displayErrors: Record<string, string> = {};
     Object.keys(zodErrors).forEach((key) => {
       if (touched[key]) {
-        displayErrors[key] = zodErrors[key];
+        const value = values[key];
+        // ✅ Show error if field has content OR form was submitted OR it's a confirmation field
+        const hasContent = typeof value === 'string' ? value.trim().length > 0 : value != null;
+        const formSubmitted = Object.keys(touched).length === config.fields.length;
+        
+        if (hasContent || formSubmitted || key.endsWith('Confirm')) {
+          displayErrors[key] = zodErrors[key];
+        }
       }
     });
     return displayErrors;
-  }, [zodErrors, touched]);
+  }, [zodErrors, touched, values, config.fields]);
 
   // Quiz validation (for rules step)
   const quizWrongByField = useMemo(() => {
@@ -226,7 +236,23 @@ export function SectionForm({
   const canSubmit = requiredSatisfied === requiredCount && quizOk && hasNoErrors && !submitting;
 
   const handleBlur = (fieldName: string) => {
-    setTouched((prev) => ({ ...prev, [fieldName]: true }));
+    setTouched((prev) => {
+      const newTouched = { ...prev, [fieldName]: true };
+      
+      // For confirmation fields, also mark the original field as touched
+      if (fieldName.endsWith('Confirm')) {
+        const originalField = fieldName.replace('Confirm', '');
+        newTouched[originalField] = true;
+      }
+      
+      // If this field has a confirmation field, mark it as touched too
+      const confirmField = `${fieldName}Confirm`;
+      if (config.fields.some(f => f.name === confirmField) && prev[confirmField]) {
+        newTouched[confirmField] = true;
+      }
+      
+      return newTouched;
+    });
   };
 
   async function handleSubmit(e: React.FormEvent) {

@@ -8,6 +8,7 @@ import {
     timestamp,
     pgEnum,
     integer,
+    jsonb
   } from "drizzle-orm/pg-core";
   
   /* ========= Enums ========= */
@@ -54,7 +55,6 @@ import {
     // Contact
     phoneNumber: text("phone_number").notNull(),
   
-    // From Google Form (per PR)
     companyOrOrganization: text("company_or_organization").notNull(),
     purposeOfVisit: text("purpose_of_visit"),
   
@@ -74,15 +74,13 @@ import {
     felonyConviction: boolean("felony_conviction").notNull().default(false),
     onProbationParole: boolean("on_probation_parole").notNull().default(false),
     pendingCharges: boolean("pending_charges").notNull().default(false),
-  
-    // Digital signature (per PR)
+    impactResponses: jsonb("impact_responses"),
+    rulesQuizAnswers: jsonb("rules_quiz_answers"),
     digitalSignature: text("digital_signature"),
-  
-    // Lifecycle (keep if already in your codebase)
+
     status: appStatusEnum("status").notNull().default("draft"),
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
   
-    // Timestamps
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   });
@@ -95,9 +93,7 @@ import {
     id: uuid("id").defaultRandom().primaryKey(),
     applicationId: uuid("application_id")
       .notNull()
-      .references(() => applications.id, { onDelete: "cascade" }), // FK to applications.id
-  
-    // File metadata (store actual file in object storage; keep URL/key here)
+      .references(() => applications.id, { onDelete: "cascade" }), 
     url: text("url").notNull(),
     filename: text("filename").notNull(),
     mimeType: text("mime_type"),

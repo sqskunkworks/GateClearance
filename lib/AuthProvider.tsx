@@ -1,4 +1,4 @@
-// lib/AuthContext.tsx  (or components/AuthProvider.tsx)
+
 'use client';
 
 import React, {
@@ -30,7 +30,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  // On mount: load current session
   useEffect(() => {
     let mounted = true;
 
@@ -46,7 +45,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser({
             id: session.user.id,
             email: session.user.email ?? null,
-            // role: session.user.user_metadata?.role ?? null, // optional
           });
         } else {
           setUser(null);
@@ -57,8 +55,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     loadInitialSession();
-
-    // Listen to auth changes (login/logout)
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -66,7 +62,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser({
           id: session.user.id,
           email: session.user.email ?? null,
-          // role: session.user.user_metadata?.role ?? null,
         });
       } else {
         setUser(null);
