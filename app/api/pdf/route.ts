@@ -2,16 +2,20 @@
 
 import { NextResponse } from 'next/server';
 import { loadBlank2311, fill2311, type AppRecord } from '@/lib/pdf2311';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 export const runtime = 'nodejs';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  // process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  { auth: { persistSession: false, autoRefreshToken: false } }
-);
+const getServiceSupabase = (): SupabaseClient => {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set');
+  }
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+};
 
 const ADMIN_SECRET = process.env.ADMIN_DOWNLOAD_SECRET!;
 
@@ -26,12 +30,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const body = await req.json();
-    const { applicationId, ssn_full, ...extraFields } = body;
+    const { applicationId, ssn_full } = body;
 
     if (!applicationId) {
       return NextResponse.json({ error: 'Missing applicationId' }, { status: 400 });
     }
 
+    const supabase = getServiceSupabase();
     const { data, error } = await supabase
       .from('applications')
       .select('*')

@@ -2,15 +2,20 @@
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { createClient as createSupabaseClient, type SupabaseClient } from '@supabase/supabase-js';
 
 export const runtime = 'nodejs';
 
-const supabase = createSupabaseClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { persistSession: false, autoRefreshToken: false } }
-);
+const getServiceSupabase = (): SupabaseClient => {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set');
+  }
+  return createSupabaseClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+};
 
 export async function PATCH(
   req: Request,
@@ -30,7 +35,13 @@ export async function PATCH(
     const body = await req.json();
 
     
-    const updateData: any = {
+    const updateData: {
+      email: string;
+      phone_number: string;
+      company_or_organization: string;
+      purpose_of_visit: string | null;
+      updated_at: string;
+    } = {
       email: body.email,
       phone_number: body.phoneNumber,
       company_or_organization: body.companyOrOrganization,
@@ -40,6 +51,7 @@ export async function PATCH(
 
    
 
+    const supabase = getServiceSupabase();
     const { error } = await supabase
       .from('applications')
       .update(updateData)
@@ -61,6 +73,7 @@ export async function PATCH(
     });
 
   } catch (error) {
+    console.error('Failed to update contact info', error);
 
     return NextResponse.json(
       { error: 'Failed to update contact info' },

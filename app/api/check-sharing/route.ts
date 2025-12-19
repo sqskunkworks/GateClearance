@@ -1,6 +1,22 @@
 
 import { NextResponse } from 'next/server';
-import { google } from 'googleapis';
+import { google, type drive_v3 } from 'googleapis';
+
+type DriveError = {
+  message?: string;
+  code?: string;
+};
+
+const normalizeError = (err: unknown): DriveError => {
+  if (err && typeof err === 'object') {
+    const errorObj = err as { message?: string; code?: string };
+    return {
+      message: errorObj.message,
+      code: errorObj.code,
+    };
+  }
+  return { message: 'Unknown error' };
+};
 
 export async function GET() {
   try {
@@ -18,8 +34,8 @@ export async function GET() {
     const drive = google.drive({ version: 'v3', auth });
 
     // Test 1: Try to access the folder
-    let folderInfo: any = null;
-    let accessError: any = null;
+    let folderInfo: drive_v3.Schema$File | null = null;
+    let accessError: DriveError | null = null;
     
     try {
       const folderResponse = await drive.files.get({
@@ -28,13 +44,13 @@ export async function GET() {
         supportsAllDrives: true,
       });
       folderInfo = folderResponse.data;
-    } catch (err: any) {
-      accessError = err;
+    } catch (err) {
+      accessError = normalizeError(err);
     }
 
     // Test 2: Check permissions
-    let permissions: any[] = [];
-    let serviceAccountPerm: any = null;
+    let permissions: drive_v3.Schema$Permission[] = [];
+    let serviceAccountPerm: drive_v3.Schema$Permission | undefined;
     
     if (folderInfo) {
       try {
@@ -45,15 +61,15 @@ export async function GET() {
         });
         permissions = permResponse.data.permissions || [];
         serviceAccountPerm = permissions.find(
-          (p: any) => p.emailAddress === serviceEmail
+          (p) => p.emailAddress === serviceEmail
         );
-      } catch (err: any) {
+      } catch {
       }
     }
 
     // Test 3: Try to write
     let canWrite = false;
-    let writeError: any = null;
+    let writeError: string | undefined;
     
     if (folderInfo) {
       try {
@@ -82,8 +98,8 @@ export async function GET() {
           fileId: testResponse.data.id!,
           supportsAllDrives: true,
         });
-      } catch (err: any) {
-        writeError = err.message;
+      } catch (err) {
+        writeError = normalizeError(err).message;
       }
     }
 
@@ -93,7 +109,7 @@ export async function GET() {
         success: false,
         problem: 'CANNOT_ACCESS_FOLDER',
         diagnosis: '❌ Service account cannot access this folder',
-        error: accessError.message,
+        error: accessError.message || 'Unknown error',
         errorCode: accessError.code,
         folderUrl: `https://drive.google.com/drive/folders/${folderId}`,
         serviceAccountEmail: serviceEmail,
@@ -113,11 +129,13 @@ export async function GET() {
         success: false,
         problem: 'NOT_IN_PERMISSIONS',
         diagnosis: '❌ Service account is NOT in the folder permissions',
-        folder: {
-          name: folderInfo.name,
-          shared: folderInfo.shared,
-        },
-        allPermissions: permissions.map((p: any) => ({
+        folder: folderInfo
+          ? {
+              name: folderInfo.name,
+              shared: folderInfo.shared,
+            }
+          : null,
+        allPermissions: permissions.map((p) => ({
           email: p.emailAddress || 'unknown',
           role: p.role,
         })),
@@ -140,10 +158,10 @@ export async function GET() {
         diagnosis: '❌ Service account cannot write to folder',
         serviceAccount: {
           email: serviceEmail,
-          role: serviceAccountPerm.role,
+          role: serviceAccountPerm?.role,
         },
         writeError,
-        instructions: serviceAccountPerm.role === 'reader' ? [
+        instructions: serviceAccountPerm?.role === 'reader' ? [
           'Service account needs Editor access (currently has Viewer):',
           `1. Open: https://drive.google.com/drive/folders/${folderId}`,
           '2. Click "Share"',
@@ -157,25 +175,37 @@ export async function GET() {
       });
     }
 
+    if (!folderInfo) {
+      return NextResponse.json({
+        success: false,
+        problem: 'UNKNOWN_FOLDER_STATE',
+        diagnosis: '❌ Unable to verify folder details',
+        serviceAccountEmail: serviceEmail,
+      }, { status: 500 });
+    }
+
+    const resolvedFolder = folderInfo;
+
     return NextResponse.json({
       success: true,
       diagnosis: '✅ Everything works! Folder is properly shared.',
       folder: {
-        name: folderInfo.name,
+        name: resolvedFolder.name,
         id: folderId,
       },
       serviceAccount: {
         email: serviceEmail,
         hasAccess: true,
-        role: serviceAccountPerm.role,
+        role: serviceAccountPerm?.role,
       },
       canWrite: true,
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errObj = normalizeError(error);
     return NextResponse.json({
       success: false,
-      error: error.message,
+      error: errObj.message,
     }, { status: 500 });
   }
 }

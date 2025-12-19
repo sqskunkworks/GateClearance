@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
-import { SectionForm } from '@/components/SectionForm';
+import { SectionForm, type FormValues } from '@/components/SectionForm';
 import { LogoutButton } from '@/components/LogoutButton';
 import {
   personalConfig,
@@ -29,18 +29,41 @@ export default function StepPage() {
   const applicationIdFromUrl = searchParams.get('id');
   
   const [applicationId, setApplicationId] = useState<string>('');
-  const [formData, setFormData] = useState<Record<string, any>>({});
+  const [formData, setFormData] = useState<FormValues>({});
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
-  
+  const loadDraft = useCallback(
+    async (appId: string) => {
+      try {
+        
+        const response = await fetch(`/api/applications/${appId}`);
+        
+        if (!response.ok) {
+          throw new Error('Failed to load');
+        }
 
-  useEffect(() => {
-    loadFormData();
-  }, [applicationIdFromUrl, currentStep]);
+        const { draft }: { draft: FormValues } = await response.json();
+ 
+        const visitDate = sessionStorage.getItem(`app_${appId}_visitDate`);
+        if (visitDate) {
+          draft.visitDate = visitDate;
+          draft.preferredVisitDate = visitDate;
+          
+        }
+        
+        setFormData(draft);
+        setLoading(false);
+      } catch (error) {
+        console.error('Failed to load draft', error);
+        setLoading(false);
+      }
+    },
+    []
+  );
 
-  const loadFormData = async () => {
+  const loadFormData = useCallback(async () => {
     try {
       
 
@@ -62,36 +85,16 @@ export default function StepPage() {
       router.push('/test-application/1');
       setLoading(false);
     } catch (error) {
+      console.error('Failed to load form data', error);
       setLoading(false);
     }
-  };
+  }, [applicationIdFromUrl, currentStep, loadDraft, router]);
 
-  const loadDraft = async (appId: string) => {
-    try {
-      
-      const response = await fetch(`/api/applications/${appId}`);
-      
-      if (!response.ok) {
-        throw new Error('Failed to load');
-      }
+  useEffect(() => {
+    loadFormData();
+  }, [loadFormData]);
 
-      const { draft } = await response.json();
- 
-      const visitDate = sessionStorage.getItem(`app_${appId}_visitDate`);
-      if (visitDate) {
-        draft.visitDate = visitDate;
-        draft.preferredVisitDate = visitDate;
-       
-      }
-      
-      setFormData(draft);
-      setLoading(false);
-    } catch (error) {
-      setLoading(false);
-    }
-  };
-
-  const handleStepComplete = async (payload: any) => {
+  const handleStepComplete = async (payload: FormValues) => {
     
     const updatedFormData = { ...formData, ...payload };
     setFormData(updatedFormData);
@@ -149,7 +152,7 @@ export default function StepPage() {
       if (currentStep === 2) {
     
         const visitDate = updatedFormData.visitDate || updatedFormData.preferredVisitDate;
-        if (visitDate) {
+        if (typeof visitDate === 'string' && visitDate) {
           sessionStorage.setItem(`app_${applicationId}_visitDate`, visitDate);
           
         }
@@ -271,7 +274,7 @@ export default function StepPage() {
           setIsSubmitting(false);
           if (submitResult.allErrors) {
             const errors = submitResult.allErrors
-              .map((e: any) => `${e.field}: ${e.message}`)
+              .map((e: { field: string; message: string }) => `${e.field}: ${e.message}`)
               .join('\n');
             alert(`Validation failed:\n\n${errors}`);
           } else {

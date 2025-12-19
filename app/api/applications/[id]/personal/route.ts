@@ -2,15 +2,20 @@
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { createClient as createSupabaseClient, type SupabaseClient } from '@supabase/supabase-js';
 
 export const runtime = 'nodejs';
 
-const supabase = createSupabaseClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { persistSession: false, autoRefreshToken: false } }
-);
+const getServiceSupabase = (): SupabaseClient => {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set');
+  }
+  return createSupabaseClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+};
 
 const convertToDBDate = (formDate: string): string => {
   if (!formDate) return '';
@@ -36,7 +41,14 @@ export async function PATCH(
     const body = await req.json();
 
   
-    const updateData: any = {
+    const updateData: {
+      first_name: string;
+      last_name: string;
+      other_names: string | null;
+      date_of_birth: string;
+      gender: string;
+      updated_at: string;
+    } = {
       first_name: body.firstName,
       last_name: body.lastName,
       other_names: body.otherNames || null,
@@ -45,6 +57,7 @@ export async function PATCH(
       updated_at: new Date().toISOString(),
     };
 
+    const supabase = getServiceSupabase();
     const { error } = await supabase
       .from('applications')
       .update(updateData)
@@ -66,6 +79,7 @@ export async function PATCH(
     });
 
   } catch (error) {
+    console.error('Failed to update personal info', error);
 
     return NextResponse.json(
       { error: 'Failed to update personal info' },

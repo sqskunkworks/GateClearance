@@ -3,7 +3,7 @@
 
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, User, Building2, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, AlertTriangle } from 'lucide-react';
 import SignaturePad, { SignaturePadHandle } from '@/components/SignaturePad';
 import { z } from 'zod';
 import { getErrorMessages } from '@/lib/validation/applicationSchema';
@@ -11,6 +11,9 @@ import { getErrorMessages } from '@/lib/validation/applicationSchema';
 /* ============================
    Types
    ============================ */
+export type FormValue = string | boolean | File | null | undefined;
+export type FormValues = Record<string, FormValue>;
+
 export type FieldBase = {
   name: string;
   label: string;
@@ -18,7 +21,7 @@ export type FieldBase = {
   helpText?: string;
   placeholder?: string;
   span?: 1 | 2;
-  showIf?: (values: Record<string, any>) => boolean;
+  showIf?: (values: FormValues) => boolean;
 };
 
 export type RadioOption = { label: string; value: string };
@@ -43,17 +46,16 @@ export type SectionConfig = {
   subtitle?: string;
   icon?: React.ReactNode;
   fields: Field[];
-  zodSchema: z.ZodType<any>; 
+  zodSchema: z.ZodType<FormValues>; 
   ctaLabel?: string;
   columns?: 1 | 2;
 };
 
 export type SectionFormProps = {
-  applicationId?: string;
   config: SectionConfig;
-  initialValues?: Record<string, any>;
+  initialValues?: FormValues;
   clearOnSuccess?: boolean;
-  onSubmit?: (values: Record<string, any>) => Promise<void> | void;
+  onSubmit?: (values: FormValues) => Promise<void> | void;
 };
 
 /* ======= UI Components ======= */
@@ -171,19 +173,18 @@ function SignatureField({
 
 /* ======= Main Component ======= */
 export function SectionForm({
-  applicationId,
   config,
   initialValues,
   clearOnSuccess,
   onSubmit,
 }: SectionFormProps) {
-  const [values, setValues] = useState<Record<string, any>>(initialValues || {});
+  const [values, setValues] = useState<FormValues>(initialValues || {});
   // Update values when initialValues changes
-useEffect(() => {
-  if (initialValues) {
-    setValues(initialValues);
-  }
-}, [initialValues]);
+  useEffect(() => {
+    if (initialValues) {
+      setValues(initialValues);
+    }
+  }, [initialValues]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [touched, setTouched] = useState<Record<string, boolean>>({});

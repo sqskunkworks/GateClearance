@@ -2,24 +2,18 @@
 
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, Suspense } from 'react';
 
-export default function SuccessPage() {
+function SuccessContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const applicationId = searchParams.get('id');
-  const [application, setApplication] = useState<any>(null);
 
   useEffect(() => {
     if (!applicationId) {
       router.push('/test-application/1');
       return;
     }
-
-    fetch(`/api/applications/${applicationId}`)
-      .then((res) => res.json())
-      .then((data) => setApplication(data.draft))
-      .catch((err) => {});
   }, [applicationId, router]);
 
   if (!applicationId) {
@@ -61,5 +55,13 @@ export default function SuccessPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SuccessPage() {
+  return (
+    <Suspense fallback={null}>
+      <SuccessContent />
+    </Suspense>
   );
 }
