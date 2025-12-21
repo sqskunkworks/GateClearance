@@ -333,7 +333,7 @@ export const securityConfig: SectionConfig = {
       required: true,
       accept: '.pdf,.jpg,.jpeg,.png',
       helpText: 'Please upload a clear scan of your passport (PDF, JPG, or PNG, max 5MB)',
-      showIf: (values: Record<string, any>) => values.governmentIdType === 'passport', 
+      showIf: (values: Record<string, unknown>) => values.governmentIdType === 'passport', 
     },
     {
       kind: 'radio',
@@ -397,7 +397,7 @@ export const securityConfig: SectionConfig = {
       required: true,
       accept: '.pdf,.jpg,.jpeg,.png',
       helpText: 'Please upload a letter from the Warden approving your visit (PDF, JPG, or PNG, max 5MB)',
-      showIf: (values: Record<string, any>) => values.formerInmate === 'yes',  // ← Changed from 'condition' to 'showIf'
+      showIf: (values: Record<string, unknown>) => values.formerInmate === 'yes',  // ← Changed from 'condition' to 'showIf'
     },
     {
       kind: 'radio',

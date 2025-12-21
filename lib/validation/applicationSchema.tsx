@@ -452,7 +452,7 @@ export function validateFullApplication(data: Partial<FullApplication>) {
   return fullApplicationSchema.safeParse(data);
 }
 
-export function getErrorMessages(result: z.ZodError<any>): Record<string, string> {
+export function getErrorMessages(result: z.ZodError<Record<string, unknown>>): Record<string, string> {
   const errors: Record<string, string> = {};
   result.issues.forEach((err) => {
     const path = err.path.join('.');

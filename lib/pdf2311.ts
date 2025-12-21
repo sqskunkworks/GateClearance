@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb, PDFFont, PDFPage } from 'pdf-lib';
+import { PDFDocument, StandardFonts } from 'pdf-lib';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -81,24 +81,24 @@ function formatSSNSegments(ssn?: string): { part1: string; part2: string; part3:
 
 export async function fill2311(doc: PDFDocument, data: AppRecord) {
   const [page] = doc.getPages();
-  const font = await doc.embedFont(StandardFonts.Helvetica);
+  await doc.embedFont(StandardFonts.Helvetica);
   const form = doc.getForm();
 
   try {
     const nameField = form.getTextField('Legal Last Name First Name and Middle Initial');
     const fullName = `${data.last_name || ''}, ${data.first_name || ''}`;
     nameField.setText(fullName);
-  } catch (e) {}
+  } catch {}
 
   try {
     const otherNamesField = form.getTextField('Other names you have been known by');
     otherNamesField.setText(data.other_names || '');
-  } catch (e) {}
+  } catch {}
 
   try {
     const dobField = form.getTextField('Date of Birth Month Day Year');
     dobField.setText(data.date_of_birth || '');
-  } catch (e) {}
+  } catch {}
 
   const ssnSegments = formatSSNSegments(data.ssn_full);
   
@@ -107,7 +107,7 @@ export async function fill2311(doc: PDFDocument, data: AppRecord) {
       form.getTextField('Social Security Number1').setText(ssnSegments.part1);
       form.getTextField('Social Security Number2').setText(ssnSegments.part2);
       form.getTextField('Social Security Number3').setText(ssnSegments.part3);
-    } catch (e) {}
+    } catch {}
   }
 
   const phoneSegments = formatPhoneSegments(data.phone_number);
@@ -118,22 +118,22 @@ export async function fill2311(doc: PDFDocument, data: AppRecord) {
       const restValue = phoneSegments.prefix + phoneSegments.line;
       form.getTextField('Contact Number1').setText(areaCodeValue);
       form.getTextField('Contact Number2').setText(restValue);
-    } catch (e) {}
+    } catch {}
   }
 
   try {
     form.getTextField('State ID or Drivers License').setText(data.gov_id_number || '');
-  } catch (e) {}
+  } catch {}
 
   try {
     form.getTextField('State').setText(data.id_state || '');
-  } catch (e) {}
+  } catch {}
 
   try {
     if (data.gov_id_type === 'passport') {
       form.getTextField('Passport if no State IDDrivers License').setText(data.gov_id_number || '');
     }
-  } catch (e) {}
+  } catch {}
 
   try {
     const genderGroup = form.getRadioGroup('Group1');
@@ -144,7 +144,7 @@ export async function fill2311(doc: PDFDocument, data: AppRecord) {
     } else if (data.gender === 'nonbinary') {
       genderGroup.select('Non-Binary');
     }
-  } catch (e) {}
+  } catch {}
 
   try {
     const visitedGroup = form.getRadioGroup('Group2');
@@ -153,7 +153,7 @@ export async function fill2311(doc: PDFDocument, data: AppRecord) {
     } else if (data.visited_inmate === false) {
       visitedGroup.select('No');
     }
-  } catch (e) {}
+  } catch {}
 
   try {
     const formerInmateGroup = form.getRadioGroup('Group3');
@@ -162,7 +162,7 @@ export async function fill2311(doc: PDFDocument, data: AppRecord) {
     } else if (data.former_inmate === false) {
       formerInmateGroup.select('No');
     }
-  } catch (e) {}
+  } catch {}
 
   try {
     const restrictedGroup = form.getRadioGroup('Group4');
@@ -171,7 +171,7 @@ export async function fill2311(doc: PDFDocument, data: AppRecord) {
     } else if (data.restricted_access === false) {
       restrictedGroup.select('No');
     }
-  } catch (e) {}
+  } catch {}
 
   try {
     const felonyGroup = form.getRadioGroup('Group5');
@@ -180,7 +180,7 @@ export async function fill2311(doc: PDFDocument, data: AppRecord) {
     } else if (data.felony_conviction === false) {
       felonyGroup.select('No');
     }
-  } catch (e) {}
+  } catch {}
 
   try {
     const probationGroup = form.getRadioGroup('Group6');
@@ -189,7 +189,7 @@ export async function fill2311(doc: PDFDocument, data: AppRecord) {
     } else if (data.on_probation_parole === false) {
       probationGroup.select('No');
     }
-  } catch (e) {}
+  } catch {}
 
   try {
     const pendingGroup = form.getRadioGroup('Group7');
@@ -198,12 +198,12 @@ export async function fill2311(doc: PDFDocument, data: AppRecord) {
     } else if (data.pending_charges === false) {
       pendingGroup.select('No');
     }
-  } catch (e) {}
+  } catch {}
 
   try {
     const authGroup = form.getRadioGroup('Group9');
     authGroup.select('Gate Clearance');
-  } catch (e) {}
+  } catch {}
 
   if (data.signature_data_url) {
     try {
@@ -214,7 +214,7 @@ export async function fill2311(doc: PDFDocument, data: AppRecord) {
       const pngImage = await doc.embedPng(png);
       const { x, y, w, h } = positions.signature;
       page.drawImage(pngImage, { x, y, width: w, height: h });
-    } catch (sigError) {}
+    } catch {}
   }
 
   return doc;

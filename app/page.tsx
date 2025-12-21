@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
-import { redirect } from 'next/navigation';
 import { LogoutButton } from '@/components/LogoutButton';
 
 export default async function HomePage() {
@@ -85,7 +84,7 @@ export default async function HomePage() {
                   <p className="text-green-900 font-medium">✓ Application Submitted</p>
                   <p className="text-green-700 text-sm mt-1">
                     Submitted on {new Date(draftStatus.created_at).toLocaleDateString()}. 
-                    We'll notify you via email once reviewed.
+                    We&apos;ll notify you via email once reviewed.
                   </p>
                 </div>
               ) : (
@@ -97,7 +96,7 @@ export default async function HomePage() {
                 </div>
               )
             ) : (
-              <p className="text-gray-600 mb-4">You haven't started an application yet.</p>
+              <p className="text-gray-600 mb-4">You haven&apos;t started an application yet.</p>
             )}
 
             <Link

@@ -24,7 +24,7 @@ export default function SignupPage() {
     try {
   
 
-      const { data, error } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -46,8 +46,9 @@ export default function SignupPage() {
       alert('✅ Account created! Please check your email to confirm your account before signing in.');
 
       router.push('/auth/login');
-    } catch (err: any) {
-      setError(err.message || 'Failed to create account');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to create account';
+      setError(message);
     } finally {
       setLoading(false);
     }

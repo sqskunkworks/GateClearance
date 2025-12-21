@@ -1,15 +1,20 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { createClient as createSupabaseClient, type SupabaseClient } from '@supabase/supabase-js';
 import { DRAFT_PLACEHOLDERS, isPlaceholder } from '@/lib/constants';
 
 export const runtime = 'nodejs';
 
-const supabase = createSupabaseClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { persistSession: false, autoRefreshToken: false } }
-);
+const getServiceSupabase = (): SupabaseClient => {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set');
+  }
+  return createSupabaseClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+};
 
 const convertToFormDate = (dbDate: string | null): string => {
   if (!dbDate) return '';
@@ -31,6 +36,7 @@ export async function GET(
 
     const { id } = await params;
 
+    const supabase = getServiceSupabase();
     const { data, error } = await supabase
       .from('applications')
       .select('*')
@@ -45,7 +51,7 @@ export async function GET(
     const isNewDraft = data.status === 'draft' && !data.submitted_at;
 
     // Transform to form format, filtering out placeholder values
-    const formData: Record<string, any> = {
+    const formData: Record<string, unknown> = {
       firstName: data.first_name || '',
       lastName: data.last_name || '',
       otherNames: data.other_names || '',
@@ -80,6 +86,7 @@ export async function GET(
     return NextResponse.json({ draft: formData });
 
   } catch (error) {
+    console.error('Failed to fetch draft', error);
 
     return NextResponse.json(
       { error: 'Failed to fetch draft' },
