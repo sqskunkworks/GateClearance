@@ -191,31 +191,58 @@ export async function POST(req: Request) {
       pending_charges: false,
       ssn_full: getString('ssnFull') || getString('ssnFirstFive') || undefined,
     };
-// After line 205, before try block:
-const fs = require('fs');
-const path = require('path');
 
-const oldPath = path.join(process.cwd(), 'public', 'templates', 'CDCR_2311_blank.pdf');
-const newPath = path.join(process.cwd(), 'lib', 'assets', 'CDCR_2311_blank.pdf');
+    // ===== TEMPORARY DEBUG - CHECK BOTH PATHS =====
+    try {
+      const fs = require('fs');
+      const path = require('path');
 
-const debugInfo = {
-  cwd: process.cwd(),
-  oldPathExists: fs.existsSync(oldPath),
-  newPathExists: fs.existsSync(newPath),
-  libContents: fs.existsSync(path.join(process.cwd(), 'lib')) 
-    ? fs.readdirSync(path.join(process.cwd(), 'lib')) 
-    : 'lib dir not found',
-  libAssetsContents: fs.existsSync(path.join(process.cwd(), 'lib', 'assets'))
-    ? fs.readdirSync(path.join(process.cwd(), 'lib', 'assets'))
-    : 'assets dir not found'
-};
+      const oldPath = path.join(process.cwd(), 'public', 'templates', 'CDCR_2311_blank.pdf');
+      const newPath = path.join(process.cwd(), 'lib', 'assets', 'CDCR_2311_blank.pdf');
 
-if (!debugInfo.newPathExists) {
-  return NextResponse.json({ 
-    error: 'DEBUG: File still not in deployment',
-    debug: debugInfo 
-  }, { status: 500 });
-}
+      const debugInfo: any = {
+        cwd: process.cwd(),
+        oldPathChecked: oldPath,
+        oldPathExists: fs.existsSync(oldPath),
+        newPathChecked: newPath,
+        newPathExists: fs.existsSync(newPath),
+        libExists: fs.existsSync(path.join(process.cwd(), 'lib')),
+      };
+
+      // Check lib directory contents
+      if (debugInfo.libExists) {
+        try {
+          const libContents = fs.readdirSync(path.join(process.cwd(), 'lib'));
+          debugInfo.libContents = libContents;
+          
+          // Check if assets folder exists
+          debugInfo.assetsExists = fs.existsSync(path.join(process.cwd(), 'lib', 'assets'));
+          
+          if (debugInfo.assetsExists) {
+            debugInfo.assetsContents = fs.readdirSync(path.join(process.cwd(), 'lib', 'assets'));
+          }
+        } catch (e) {
+          debugInfo.libError = e instanceof Error ? e.message : 'Unknown error';
+        }
+      }
+
+      // If new path doesn't exist, return debug info
+      if (!debugInfo.newPathExists) {
+        return NextResponse.json({ 
+          error: 'DEBUG: PDF template not found in lib/assets',
+          debug: debugInfo,
+          solution: 'The file is in git but not being deployed to Vercel. Check build logs.'
+        }, { status: 500 });
+      }
+
+    } catch (debugError) {
+      return NextResponse.json({ 
+        error: 'DEBUG: Filesystem check failed',
+        details: debugError instanceof Error ? debugError.message : 'Unknown error'
+      }, { status: 500 });
+    }
+    // ===== END DEBUG =====
+
     try {
       const pdfDoc = await loadBlank2311();
       await fill2311(pdfDoc, pdfRecord);
