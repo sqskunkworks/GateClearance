@@ -1,0 +1,8 @@
+# Architecture
+
+- **App shell**: Next.js App Router in `app/` with a global `AuthProvider` (`context/AuthContext.tsx`) that syncs Supabase auth state client-side for gated routes like `app/dashboard`.
+- **Forms**: Multi-step intake built from a single reusable renderer (`components/SectionForm.tsx`). Each step (`app/personal`, `app/contact`, `app/rules`, `app/experience`, `app/security`) passes a config object describing fields, validation, and payload shaping; `utils/form-routes.ts` drives step-to-step navigation and preserves `?id` query params.
+- **Data + auth**: Supabase JS client (`lib/supabaseClient.ts`) created from public URL/anon key; email/password auth handled in `app/auth/login` and `app/auth/signup`, with session-aware dashboard logout. Database schema is modeled in `db/schema.ts` (Drizzle) with `applications` and `documents` tables plus enums for gender, application status, and government ID type.
+- **Validation & PII handling**: Client-side guards normalize and validate SSNs, government IDs, dates, and conditional fields; files are reduced to names before submit. API paths in configs are placeholders—server routes must enforce the same or stricter validation before persisting PII or generating PDFs.
+- **UI layer**: Tailwind v4 for styling, Lucide icons for section headers/callouts, and Framer Motion for animated error callouts within the shared form component.
+- **Planned services**: Final submission is expected to call server-side routes to write to Supabase Postgres, generate PDFs (e.g., pdf-lib), and store them (Supabase Storage or Google Drive per design doc); `documents` table is ready to track stored artifacts.
