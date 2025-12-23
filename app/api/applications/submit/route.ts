@@ -193,42 +193,82 @@ export async function POST(req: Request) {
     };
 
     // Generate and upload main PDF
-    try {
-      console.log('📄 Loading PDF template...');
-      const pdfDoc = await loadBlank2311();
-      
-      console.log('✍️ Filling PDF with data...');
-      await fill2311(pdfDoc, pdfRecord);
-      
-      console.log('💾 Saving PDF...');
-      const pdfBytes = await pdfDoc.save();
-      
-      if (!pdfBytes || pdfBytes.length === 0) {
-        throw new Error('PDF generation returned empty buffer');
-      }
-      
-      const filename = `CDCR_2311_${formDataObj.firstName}_${formDataObj.lastName}_${applicationId}.pdf`;
-      const pdfBuffer = Buffer.from(pdfBytes);
-      
-      console.log('☁️ Uploading PDF to Google Drive...');
-      await uploadPDFToDrive(pdfBuffer, filename);
+  // Generate and upload main PDF
+try {
+  console.log('=== PDF GENERATION START ===');
+  console.log('📋 PDF Record:', JSON.stringify(pdfRecord, null, 2));
+  
+  console.log('📄 Step 1: Loading PDF template...');
+  const pdfDoc = await loadBlank2311();
+  console.log('✅ PDF template loaded successfully');
+  
+  console.log('✍️ Step 2: Filling PDF with data...');
+  await fill2311(pdfDoc, pdfRecord);
+  console.log('✅ PDF filled successfully');
+  
+  console.log('💾 Step 3: Saving PDF...');
+  const pdfBytes = await pdfDoc.save();
+  console.log('✅ PDF saved, checking result...');
+  console.log('🔍 PDF Bytes check:', {
+    exists: !!pdfBytes,
+    type: typeof pdfBytes,
+    isUint8Array: pdfBytes instanceof Uint8Array,
+    length: pdfBytes?.length,
+    firstFewBytes: pdfBytes ? Array.from(pdfBytes.slice(0, 10)) : null,
+  });
+  
+  if (!pdfBytes || pdfBytes.length === 0) {
+    throw new Error('PDF generation returned empty buffer');
+  }
+  
+  console.log('🔄 Step 4: Converting to Buffer...');
+  const pdfBuffer = Buffer.from(pdfBytes);
+  console.log('🔍 Buffer check:', {
+    exists: !!pdfBuffer,
+    type: typeof pdfBuffer,
+    isBuffer: Buffer.isBuffer(pdfBuffer),
+    length: pdfBuffer?.length,
+    firstFewBytes: pdfBuffer ? Array.from(pdfBuffer.slice(0, 10)) : null,
+  });
+  
+  const filename = `CDCR_2311_${formDataObj.firstName}_${formDataObj.lastName}_${applicationId}.pdf`;
+  console.log('📝 Filename:', filename);
+  
+  console.log('☁️ Step 5: Uploading to Google Drive...');
+  console.log('🔍 Upload parameters:', {
+    bufferExists: !!pdfBuffer,
+    bufferType: typeof pdfBuffer,
+    bufferLength: pdfBuffer?.length,
+    filename: filename,
+  });
+  
+  await uploadPDFToDrive(pdfBuffer, filename);
+  console.log('✅ Upload to Drive successful');
 
-      console.log('💾 Saving PDF record to database...');
-      await supabase.from('documents').insert({
-        application_id: applicationId,
-        filename: filename,
-        url: ' ',
-        mime_type: 'application/pdf',
-        size_bytes: pdfBytes.length,
-        uploaded_by_user_id: user.id,
-      });
-      
-      console.log('✅ Main PDF uploaded successfully');
+  console.log('💾 Step 6: Saving to database...');
+  await supabase.from('documents').insert({
+    application_id: applicationId,
+    filename: filename,
+    url: ' ',
+    mime_type: 'application/pdf',
+    size_bytes: pdfBytes.length,
+    uploaded_by_user_id: user.id,
+  });
+  console.log('✅ Database record saved');
+  
+  console.log('=== PDF GENERATION COMPLETE ===');
 
-    } catch (pdfError) {
-      console.error('❌ PDF generation failed:', pdfError);
-      throw new Error(`Failed to generate PDF: ${pdfError instanceof Error ? pdfError.message : 'Unknown error'}`);
-    }
+} catch (pdfError) {
+  console.error('❌ PDF generation failed at some step');
+  console.error('Error details:', pdfError);
+  console.error('Error type:', typeof pdfError);
+  console.error('Error constructor:', pdfError?.constructor?.name);
+  if (pdfError instanceof Error) {
+    console.error('Error message:', pdfError.message);
+    console.error('Error stack:', pdfError.stack);
+  }
+  throw new Error(`Failed to generate PDF: ${pdfError instanceof Error ? pdfError.message : 'Unknown error'}`);
+}
 
     // Upload passport scan if applicable
     const passportScanFile = formData.get('passportScan');
