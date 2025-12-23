@@ -1,6 +1,5 @@
 import { PDFDocument, StandardFonts } from 'pdf-lib';
-import fs from 'node:fs';
-import path from 'node:path';
+import { CDCR_2311_TEMPLATE_BASE64 } from './assets/templates';
 
 export type AppRecord = {
   first_name?: string;
@@ -26,17 +25,16 @@ export type AppRecord = {
   pending_charges?: boolean;
 };
 
-export async function loadBlank2311() {
-  const p = path.join(process.cwd(), 'public', 'templates', 'CDCR_2311_blank.pdf');
-
-  if (!fs.existsSync(p)) {
-    throw new Error(`PDF template not found at ${p}`);
+export async function loadBlank2311(): Promise<PDFDocument> {
+  try {
+    // Load from embedded base64 (works in all environments including Vercel)
+    const cleanBase64 = CDCR_2311_TEMPLATE_BASE64.replace(/\s/g, '');
+    const bytes = Buffer.from(cleanBase64, 'base64');
+    const doc = await PDFDocument.load(bytes);
+    return doc;
+  } catch (error) {
+    throw new Error(`Failed to load PDF template: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
-  
-  const bytes = fs.readFileSync(p);
-  const doc = await PDFDocument.load(bytes);
-
-  return doc;
 }
 
 const positions = {

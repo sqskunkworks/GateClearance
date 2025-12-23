@@ -192,60 +192,15 @@ export async function POST(req: Request) {
       ssn_full: getString('ssnFull') || getString('ssnFirstFive') || undefined,
     };
 
-    // ===== TEMPORARY DEBUG - CHECK BOTH PATHS =====
+    // Generate and upload main PDF
     try {
-      const fs = require('fs');
-      const path = require('path');
-
-      const oldPath = path.join(process.cwd(), 'public', 'templates', 'CDCR_2311_blank.pdf');
-      const newPath = path.join(process.cwd(), 'lib', 'assets', 'CDCR_2311_blank.pdf');
-
-      const debugInfo: any = {
-        cwd: process.cwd(),
-        oldPathChecked: oldPath,
-        oldPathExists: fs.existsSync(oldPath),
-        newPathChecked: newPath,
-        newPathExists: fs.existsSync(newPath),
-        libExists: fs.existsSync(path.join(process.cwd(), 'lib')),
-      };
-
-      // Check lib directory contents
-      if (debugInfo.libExists) {
-        try {
-          const libContents = fs.readdirSync(path.join(process.cwd(), 'lib'));
-          debugInfo.libContents = libContents;
-          
-          // Check if assets folder exists
-          debugInfo.assetsExists = fs.existsSync(path.join(process.cwd(), 'lib', 'assets'));
-          
-          if (debugInfo.assetsExists) {
-            debugInfo.assetsContents = fs.readdirSync(path.join(process.cwd(), 'lib', 'assets'));
-          }
-        } catch (e) {
-          debugInfo.libError = e instanceof Error ? e.message : 'Unknown error';
-        }
-      }
-
-      // If new path doesn't exist, return debug info
-      if (!debugInfo.newPathExists) {
-        return NextResponse.json({ 
-          error: 'DEBUG: PDF template not found in lib/assets',
-          debug: debugInfo,
-          solution: 'The file is in git but not being deployed to Vercel. Check build logs.'
-        }, { status: 500 });
-      }
-
-    } catch (debugError) {
-      return NextResponse.json({ 
-        error: 'DEBUG: Filesystem check failed',
-        details: debugError instanceof Error ? debugError.message : 'Unknown error'
-      }, { status: 500 });
-    }
-    // ===== END DEBUG =====
-
-    try {
+      console.log('📄 Loading PDF template...');
       const pdfDoc = await loadBlank2311();
+      
+      console.log('✍️ Filling PDF with data...');
       await fill2311(pdfDoc, pdfRecord);
+      
+      console.log('💾 Saving PDF...');
       const pdfBytes = await pdfDoc.save();
       
       if (!pdfBytes || pdfBytes.length === 0) {
@@ -255,8 +210,10 @@ export async function POST(req: Request) {
       const filename = `CDCR_2311_${formDataObj.firstName}_${formDataObj.lastName}_${applicationId}.pdf`;
       const pdfBuffer = Buffer.from(pdfBytes);
       
+      console.log('☁️ Uploading PDF to Google Drive...');
       await uploadPDFToDrive(pdfBuffer, filename);
 
+      console.log('💾 Saving PDF record to database...');
       await supabase.from('documents').insert({
         application_id: applicationId,
         filename: filename,
@@ -265,17 +222,33 @@ export async function POST(req: Request) {
         size_bytes: pdfBytes.length,
         uploaded_by_user_id: user.id,
       });
+      
+      console.log('✅ Main PDF uploaded successfully');
 
     } catch (pdfError) {
-      console.error('PDF generation failed:', pdfError);
+      console.error('❌ PDF generation failed:', pdfError);
       throw new Error(`Failed to generate PDF: ${pdfError instanceof Error ? pdfError.message : 'Unknown error'}`);
     }
 
-    const passportScanFile = formData.get('passportScan') as File | null;
+    // Upload passport scan if applicable
+    const passportScanFile = formData.get('passportScan');
     
-    if (getString('governmentIdType') === 'passport' && passportScanFile instanceof File) {
+    if (getString('governmentIdType') === 'passport') {
+      if (!passportScanFile || !(passportScanFile instanceof File)) {
+        console.error('❌ Passport required but file is missing');
+        return NextResponse.json(
+          { error: 'Passport scan is required when using passport as ID' },
+          { status: 400 }
+        );
+      }
+      
       try {
+        console.log('📄 Processing passport upload...');
         const passportBuffer = Buffer.from(await passportScanFile.arrayBuffer());
+        
+        if (!passportBuffer || passportBuffer.length === 0) {
+          throw new Error('Passport file is empty');
+        }
         
         let extension = 'pdf';
         if (passportScanFile.type === 'image/jpeg' || passportScanFile.type === 'image/jpg') {
@@ -286,6 +259,7 @@ export async function POST(req: Request) {
         
         const passportFilename = `Passport_${formDataObj.firstName}_${formDataObj.lastName}_${applicationId}.${extension}`;
         
+        console.log('☁️ Uploading passport to Drive...');
         await uploadPDFToDrive(passportBuffer, passportFilename);
         
         await supabase.from('documents').insert({
@@ -296,19 +270,41 @@ export async function POST(req: Request) {
           size_bytes: passportBuffer.length,
           uploaded_by_user_id: user.id,
         });
+        
+        console.log('✅ Passport uploaded successfully');
       } catch (passportError) {
-        console.error('Passport upload failed:', passportError);
+        console.error('❌ Passport upload failed:', passportError);
+        return NextResponse.json(
+          { error: 'Failed to upload passport scan', details: passportError instanceof Error ? passportError.message : 'Unknown error' },
+          { status: 500 }
+        );
       }
     }
 
-    const wardenLetterFile = formData.get('wardenLetter') as File | null;
+    // Upload warden letter if applicable
+    const wardenLetterFile = formData.get('wardenLetter');
     
-    if (getString('formerInmate') === 'yes' && wardenLetterFile instanceof File) {
+    if (getString('formerInmate') === 'yes') {
+      if (!wardenLetterFile || !(wardenLetterFile instanceof File)) {
+        console.error('❌ Warden letter required but file is missing');
+        return NextResponse.json(
+          { error: 'Warden letter is required for former inmates' },
+          { status: 400 }
+        );
+      }
+      
       try {
+        console.log('📄 Processing warden letter upload...');
         const wardenBuffer = Buffer.from(await wardenLetterFile.arrayBuffer());
+        
+        if (!wardenBuffer || wardenBuffer.length === 0) {
+          throw new Error('Warden letter file is empty');
+        }
+        
         const extension = wardenLetterFile.type.includes('pdf') ? 'pdf' : 'jpg';
         const wardenFilename = `WardenLetter_${formDataObj.firstName}_${formDataObj.lastName}_${applicationId}.${extension}`;
         
+        console.log('☁️ Uploading warden letter to Drive...');
         await uploadPDFToDrive(wardenBuffer, wardenFilename);
         
         await supabase.from('documents').insert({
@@ -319,8 +315,14 @@ export async function POST(req: Request) {
           size_bytes: wardenBuffer.length,
           uploaded_by_user_id: user.id,
         });
+        
+        console.log('✅ Warden letter uploaded successfully');
       } catch (wardenError) {
-        console.error('Warden letter upload failed:', wardenError);
+        console.error('❌ Warden letter upload failed:', wardenError);
+        return NextResponse.json(
+          { error: 'Failed to upload warden letter', details: wardenError instanceof Error ? wardenError.message : 'Unknown error' },
+          { status: 500 }
+        );
       }
     }
 
@@ -331,7 +333,7 @@ export async function POST(req: Request) {
     });
 
   } catch (error) {
-    console.error('Submit failed:', error);
+    console.error('❌ Submit failed:', error);
     
     return NextResponse.json(
       { 
