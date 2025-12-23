@@ -76,34 +76,12 @@ export default async function HomePage() {
         {/* User Status & CTA */}
         {user ? (
           <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 mb-8">
-            <h3 className="text-xl font-bold mb-4">Your Application</h3>
-            
-            {draftStatus ? (
-              draftStatus.status === 'submitted' ? (
-                <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
-                  <p className="text-green-900 font-medium">✓ Application Submitted</p>
-                  <p className="text-green-700 text-sm mt-1">
-                    Submitted on {new Date(draftStatus.created_at).toLocaleDateString()}. 
-                    We&apos;ll notify you via email once reviewed.
-                  </p>
-                </div>
-              ) : (
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
-                  <p className="text-blue-900 font-medium">Draft in Progress</p>
-                  <p className="text-blue-700 text-sm mt-1">
-                    Last updated {new Date(draftStatus.updated_at).toLocaleTimeString()} on {new Date(draftStatus.updated_at).toLocaleDateString()}
-                  </p>
-                </div>
-              )
-            ) : (
-              <p className="text-gray-600 mb-4">You haven&apos;t started an application yet.</p>
-            )}
 
             <Link
               href="/test-application/1"
               className="inline-block px-8 py-4 bg-black text-white rounded-xl font-semibold text-lg hover:bg-gray-800 transition-colors"
             >
-              {draftStatus?.status === 'draft' ? 'Continue Application' : 'Start Application'}
+              Start Application
             </Link>
           </div>
         ) : (

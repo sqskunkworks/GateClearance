@@ -4,14 +4,28 @@ import { Readable } from 'stream';
 const SCOPES = ['https://www.googleapis.com/auth/drive.file'];
 
 function getDriveClient() {
-  const privateKey = Buffer.from(
-    process.env.GOOGLE_PRIVATE_KEY_BASE64!,
-    'base64'
-  ).toString('utf-8');
+  if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL) {
+    throw new Error('GOOGLE_SERVICE_ACCOUNT_EMAIL is not set');
+  }
+  
+  if (!process.env.GOOGLE_PRIVATE_KEY_BASE64) {
+    throw new Error('GOOGLE_PRIVATE_KEY_BASE64 is not set');
+  }
+
+  let privateKey: string;
+  
+  try {
+    privateKey = Buffer.from(
+      process.env.GOOGLE_PRIVATE_KEY_BASE64,
+      'base64'
+    ).toString('utf-8');
+  } catch (error) {
+    throw new Error('Failed to decode GOOGLE_PRIVATE_KEY_BASE64');
+  }
 
   const auth = new google.auth.GoogleAuth({
     credentials: {
-      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL!,
+      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
       private_key: privateKey,
     },
     scopes: SCOPES,
@@ -25,8 +39,6 @@ export async function uploadPDFToDrive(
   filename: string
 ): Promise<{ fileId: string; webViewLink: string }> {
   try {
-
-
     const drive = getDriveClient();
     const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID!;
     const stream = Readable.from(pdfBuffer);
@@ -76,8 +88,7 @@ export async function deleteFileFromDrive(fileId: string): Promise<void> {
     await drive.files.delete({ 
       fileId,
       supportsAllDrives: true,
-    })
-
+    });
   } catch (error: unknown) {
     throw error instanceof Error ? error : new Error('Failed to delete file from Drive');
   }

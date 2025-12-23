@@ -192,28 +192,52 @@ export async function POST(req: Request) {
       ssn_full: getString('ssnFull') || getString('ssnFirstFive') || undefined,
     };
 
-    const pdfDoc = await loadBlank2311();
-    await fill2311(pdfDoc, pdfRecord);
-    const pdfBytes = await pdfDoc.save();
-    
-    const filename = `CDCR_2311_${formDataObj.firstName}_${formDataObj.lastName}_${applicationId}.pdf`;
-    
-    await uploadPDFToDrive(Buffer.from(pdfBytes), filename);
+    // Generate and upload main PDF
+    try {
+      const pdfDoc = await loadBlank2311();
+      await fill2311(pdfDoc, pdfRecord);
+      const pdfBytes = await pdfDoc.save();
+      
+      if (!pdfBytes || pdfBytes.length === 0) {
+        throw new Error('PDF generation returned empty buffer');
+      }
+      
+      const filename = `CDCR_2311_${formDataObj.firstName}_${formDataObj.lastName}_${applicationId}.pdf`;
+      const pdfBuffer = Buffer.from(pdfBytes);
+      
+      await uploadPDFToDrive(pdfBuffer, filename);
 
-    await supabase.from('documents').insert({
-      application_id: applicationId,
-      filename: filename,
-      url: ' ',
-      mime_type: 'application/pdf',
-      size_bytes: pdfBytes.length,
-      uploaded_by_user_id: user.id,
-    });
+      await supabase.from('documents').insert({
+        application_id: applicationId,
+        filename: filename,
+        url: ' ',
+        mime_type: 'application/pdf',
+        size_bytes: pdfBytes.length,
+        uploaded_by_user_id: user.id,
+      });
 
-    const passportScanFile = formData.get('passportScan') as File | null;
+    } catch (pdfError) {
+      console.error('PDF generation failed:', pdfError);
+      throw new Error(`Failed to generate PDF: ${pdfError instanceof Error ? pdfError.message : 'Unknown error'}`);
+    }
+
+    // Upload passport scan if applicable
+    const passportScanFile = formData.get('passportScan');
     
-    if (getString('governmentIdType') === 'passport' && passportScanFile instanceof File) {
+    if (getString('governmentIdType') === 'passport') {
+      if (!passportScanFile || !(passportScanFile instanceof File)) {
+        return NextResponse.json(
+          { error: 'Passport scan is required when using passport as ID' },
+          { status: 400 }
+        );
+      }
+      
       try {
         const passportBuffer = Buffer.from(await passportScanFile.arrayBuffer());
+        
+        if (!passportBuffer || passportBuffer.length === 0) {
+          throw new Error('Passport file is empty');
+        }
         
         let extension = 'pdf';
         if (passportScanFile.type === 'image/jpeg' || passportScanFile.type === 'image/jpg') {
@@ -234,16 +258,34 @@ export async function POST(req: Request) {
           size_bytes: passportBuffer.length,
           uploaded_by_user_id: user.id,
         });
+        
       } catch (passportError) {
-        console.error('Failed to upload passport scan', passportError);
+        console.error('Passport upload failed:', passportError);
+        return NextResponse.json(
+          { error: 'Failed to upload passport scan', details: passportError instanceof Error ? passportError.message : 'Unknown error' },
+          { status: 500 }
+        );
       }
     }
 
-    const wardenLetterFile = formData.get('wardenLetter') as File | null;
+    // Upload warden letter if applicable
+    const wardenLetterFile = formData.get('wardenLetter');
     
-    if (getString('formerInmate') === 'yes' && wardenLetterFile instanceof File) {
+    if (getString('formerInmate') === 'yes') {
+      if (!wardenLetterFile || !(wardenLetterFile instanceof File)) {
+        return NextResponse.json(
+          { error: 'Warden letter is required for former inmates' },
+          { status: 400 }
+        );
+      }
+      
       try {
         const wardenBuffer = Buffer.from(await wardenLetterFile.arrayBuffer());
+        
+        if (!wardenBuffer || wardenBuffer.length === 0) {
+          throw new Error('Warden letter file is empty');
+        }
+        
         const extension = wardenLetterFile.type.includes('pdf') ? 'pdf' : 'jpg';
         const wardenFilename = `WardenLetter_${formDataObj.firstName}_${formDataObj.lastName}_${applicationId}.${extension}`;
         
@@ -257,8 +299,13 @@ export async function POST(req: Request) {
           size_bytes: wardenBuffer.length,
           uploaded_by_user_id: user.id,
         });
+        
       } catch (wardenError) {
-        console.error('Failed to upload warden letter', wardenError);
+        console.error('Warden letter upload failed:', wardenError);
+        return NextResponse.json(
+          { error: 'Failed to upload warden letter', details: wardenError instanceof Error ? wardenError.message : 'Unknown error' },
+          { status: 500 }
+        );
       }
     }
 
@@ -269,6 +316,7 @@ export async function POST(req: Request) {
     });
 
   } catch (error) {
+    console.error('Submit failed:', error);
     
     return NextResponse.json(
       { 
