@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useMemo, useState, useRef, useEffect } from 'react';
@@ -128,6 +127,7 @@ const isTextInput = (f: Field): f is Extract<Field, { kind: TextKinds }> =>
 const isRadio = (f: Field): f is Extract<Field, { kind: 'radio' }> => f.kind === 'radio';
 const isFile = (f: Field): f is Extract<Field, { kind: 'file' }> => f.kind === 'file';
 const isSignature = (f: Field): f is Extract<Field, { kind: 'signature' }> => f.kind === 'signature';
+const isCheckbox = (f: Field): f is Extract<Field, { kind: 'checkbox' }> => f.kind === 'checkbox';
 
 /* ======= Signature field wrapper ======= */
 function SignatureField({
@@ -179,12 +179,13 @@ export function SectionForm({
   onSubmit,
 }: SectionFormProps) {
   const [values, setValues] = useState<FormValues>(initialValues || {});
-  // Update values when initialValues changes
+  
   useEffect(() => {
     if (initialValues) {
       setValues(initialValues);
     }
   }, [initialValues]);
+  
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
@@ -195,13 +196,11 @@ export function SectionForm({
     return getErrorMessages(result.error);
   }, [config.zodSchema, values]);
 
-  // Only show errors for touched fields
   const errors = useMemo(() => {
     const displayErrors: Record<string, string> = {};
     Object.keys(zodErrors).forEach((key) => {
       if (touched[key]) {
         const value = values[key];
-        // ✅ Show error if field has content OR form was submitted OR it's a confirmation field
         const hasContent = typeof value === 'string' ? value.trim().length > 0 : value != null;
         const formSubmitted = Object.keys(touched).length === config.fields.length;
         
@@ -213,7 +212,6 @@ export function SectionForm({
     return displayErrors;
   }, [zodErrors, touched, values, config.fields]);
 
-  // Quiz validation (for rules step)
   const quizWrongByField = useMemo(() => {
     const wrong: Record<string, true> = {};
     for (const f of config.fields) {
@@ -240,13 +238,11 @@ export function SectionForm({
     setTouched((prev) => {
       const newTouched = { ...prev, [fieldName]: true };
       
-      // For confirmation fields, also mark the original field as touched
       if (fieldName.endsWith('Confirm')) {
         const originalField = fieldName.replace('Confirm', '');
         newTouched[originalField] = true;
       }
       
-      // If this field has a confirmation field, mark it as touched too
       const confirmField = `${fieldName}Confirm`;
       if (config.fields.some(f => f.name === confirmField) && prev[confirmField]) {
         newTouched[confirmField] = true;
@@ -259,7 +255,6 @@ export function SectionForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     
-    // Mark all fields as touched
     const allTouched: Record<string, boolean> = {};
     config.fields.forEach((f) => {
       allTouched[f.name] = true;
@@ -272,7 +267,6 @@ export function SectionForm({
     try {
       setSubmitting(true);
       
-      // Final Zod validation
       const result = config.zodSchema.safeParse(values);
       if (!result.success) {
         const firstError = result.error.issues[0];
@@ -299,12 +293,13 @@ export function SectionForm({
 
     return (
       <div key={f.name} className={isTextarea(f) || f.span === 2 ? 'md:col-span-2' : ''}>
-        <label className="block text-sm font-medium text-gray-800" htmlFor={f.name}>
-          {f.label}
-          {f.required && <span className="text-red-600"> *</span>}
-        </label>
+        {!isCheckbox(f) && (
+          <label className="block text-sm font-medium text-gray-800" htmlFor={f.name}>
+            {f.label}
+            {f.required && <span className="text-red-600"> *</span>}
+          </label>
+        )}
 
-        {/* textarea */}
         {isTextarea(f) && (
           <TextArea
             id={f.name}
@@ -316,7 +311,6 @@ export function SectionForm({
           />
         )}
 
-        {/* text|email|tel|date */}
         {isTextInput(f) && (
           <Input
             id={f.name}
@@ -329,7 +323,6 @@ export function SectionForm({
           />
         )}
 
-        {/* radio */}
         {isRadio(f) && (
           <div className="mt-1 grid grid-cols-1 gap-2">
             {f.options.map((opt) => {
@@ -337,7 +330,7 @@ export function SectionForm({
               return (
                 <label
                   key={opt.value}
-                  className={`flex items-center justify-between gap-2 rounded-xl border px-4 py-2 text-sm ${
+                  className={`flex items-center justify-between gap-2 rounded-xl border px-4 py-2 text-sm cursor-pointer ${
                     selected ? 'border-black bg-black text-white' : 'border-gray-300 hover:border-gray-400'
                   }`}
                 >
@@ -346,7 +339,7 @@ export function SectionForm({
                       type="radio"
                       name={f.name}
                       value={opt.value}
-                      className="h-4 w-4 accent-black"
+                      className="h-4 w-4 accent-black cursor-pointer"
                       checked={selected}
                       onChange={() => {
                         setValues((v) => ({ ...v, [f.name]: opt.value }));
@@ -362,24 +355,25 @@ export function SectionForm({
           </div>
         )}
 
-        {/* checkbox */}
-        {f.kind === 'checkbox' && (
-          <label className="mt-1 flex items-start gap-3 text-sm text-gray-800">
+        {isCheckbox(f) && (
+          <label className="mt-1 flex items-start gap-3 text-sm text-gray-800 cursor-pointer">
             <input
               id={f.name}
               type="checkbox"
-              className="mt-1 h-4 w-4 accent-black"
+              className="mt-1 h-4 w-4 accent-black cursor-pointer"
               checked={Boolean(values[f.name])}
               onChange={(e) => {
                 setValues((v) => ({ ...v, [f.name]: e.target.checked }));
                 handleBlur(f.name);
               }}
             />
-            <span>{f.label}</span>
+            <span>
+              {f.label}
+              {f.required && <span className="text-red-600"> *</span>}
+            </span>
           </label>
         )}
 
-        {/* signature */}
         {isSignature(f) && (
           <SignatureField
             height={f.height}
@@ -390,7 +384,6 @@ export function SectionForm({
           />
         )}
 
-        {/* file */}
         {isFile(f) && (
           <div className="mt-1">
             <input
@@ -427,11 +420,9 @@ export function SectionForm({
           </div>
         )}
 
-        {/* help/error */}
         {f.helpText && <p className="mt-1 text-xs text-gray-600">{f.helpText}</p>}
         {errors[f.name] && <p className="mt-1 text-xs text-red-600">{errors[f.name]}</p>}
 
-        {/* Wrong-answer callout for quiz radios */}
         {isRadio(f) && f.correctValue && values[f.name] && values[f.name] !== f.correctValue && (
           <ErrorCallout title={f.wrongCallout?.title} points={f.wrongCallout?.points || []} />
         )}
@@ -455,7 +446,6 @@ export function SectionForm({
         <div className="h-24" />
       </div>
 
-      {/* Sticky footer */}
       <div className="fixed inset-x-0 bottom-0 border-t border-gray-200 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-4">
           <div className="text-xs text-gray-600">

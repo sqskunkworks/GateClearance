@@ -103,7 +103,7 @@ export default async function HomePage() {
               href="/test-application/1"
               className="inline-block px-8 py-4 bg-black text-white rounded-xl font-semibold text-lg hover:bg-gray-800 transition-colors"
             >
-              {draftStatus?.status === 'draft' ? 'Continue Application' : 'Start Application'}
+              Start Application
             </Link>
           </div>
         ) : (

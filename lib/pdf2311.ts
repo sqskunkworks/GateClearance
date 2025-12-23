@@ -27,7 +27,7 @@ export type AppRecord = {
 };
 
 export async function loadBlank2311() {
-  const p = path.join(process.cwd(), 'public', 'templates', 'CDCR_2311_blank.pdf');
+  const p = path.join(process.cwd(), 'lib', 'assets', 'CDCR_2311_blank.pdf');
 
   if (!fs.existsSync(p)) {
     throw new Error(`PDF template not found at ${p}`);
