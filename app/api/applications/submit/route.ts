@@ -5,6 +5,8 @@ import { validateFullApplication } from '@/lib/validation/applicationSchema';
 import { loadBlank2311, fill2311, type AppRecord } from '@/lib/pdf2311';
 import { uploadPDFToDrive } from '@/lib/googleDrive';
 import { DRAFT_PLACEHOLDERS, isPlaceholder } from '@/lib/constants';
+import fs from 'node:fs';
+import path from 'node:path';
 
 export const runtime = 'nodejs';
 
@@ -192,22 +194,91 @@ export async function POST(req: Request) {
       ssn_full: getString('ssnFull') || getString('ssnFirstFive') || undefined,
     };
 
-    const pdfDoc = await loadBlank2311();
-    await fill2311(pdfDoc, pdfRecord);
-    const pdfBytes = await pdfDoc.save();
-    
-    const filename = `CDCR_2311_${formDataObj.firstName}_${formDataObj.lastName}_${applicationId}.pdf`;
-    
-    await uploadPDFToDrive(Buffer.from(pdfBytes), filename);
+    // ===== DEBUG FILESYSTEM =====
+    try {
+      const debugInfo: any = {
+        cwd: process.cwd(),
+        nodeEnv: process.env.NODE_ENV,
+        publicPath: path.join(process.cwd(), 'public', 'templates', 'CDCR_2311_blank.pdf'),
+        publicExists: false,
+        rootContents: [],
+        publicContents: [],
+      };
+      
+      // Check if public/templates path exists
+      debugInfo.publicExists = fs.existsSync(debugInfo.publicPath);
+      
+      // List root directory contents
+      try {
+        debugInfo.rootContents = fs.readdirSync(process.cwd()).slice(0, 20);
+      } catch (e) {
+        debugInfo.rootError = e instanceof Error ? e.message : 'Unknown error';
+      }
+      
+      // List public directory contents
+      try {
+        const publicDir = path.join(process.cwd(), 'public');
+        if (fs.existsSync(publicDir)) {
+          debugInfo.publicContents = fs.readdirSync(publicDir);
+          
+          // Check templates subdirectory
+          const templatesDir = path.join(publicDir, 'templates');
+          if (fs.existsSync(templatesDir)) {
+            debugInfo.templatesContents = fs.readdirSync(templatesDir);
+          } else {
+            debugInfo.templatesExists = false;
+          }
+        } else {
+          debugInfo.publicDirExists = false;
+        }
+      } catch (e) {
+        debugInfo.publicError = e instanceof Error ? e.message : 'Unknown error';
+      }
+      
+      // If template doesn't exist, return debug info
+      if (!debugInfo.publicExists) {
+        return NextResponse.json({ 
+          error: 'DEBUG: PDF template not found in deployment',
+          debug: debugInfo,
+          solution: 'The CDCR_2311_blank.pdf file exists in git but is not being deployed to Vercel'
+        }, { status: 500 });
+      }
+      
+    } catch (debugError) {
+      return NextResponse.json({ 
+        error: 'DEBUG: Filesystem check failed',
+        details: debugError instanceof Error ? debugError.message : 'Unknown error'
+      }, { status: 500 });
+    }
+    // ===== END DEBUG =====
 
-    await supabase.from('documents').insert({
-      application_id: applicationId,
-      filename: filename,
-      url: ' ',
-      mime_type: 'application/pdf',
-      size_bytes: pdfBytes.length,
-      uploaded_by_user_id: user.id,
-    });
+    try {
+      const pdfDoc = await loadBlank2311();
+      await fill2311(pdfDoc, pdfRecord);
+      const pdfBytes = await pdfDoc.save();
+      
+      if (!pdfBytes || pdfBytes.length === 0) {
+        throw new Error('PDF generation returned empty buffer');
+      }
+      
+      const filename = `CDCR_2311_${formDataObj.firstName}_${formDataObj.lastName}_${applicationId}.pdf`;
+      const pdfBuffer = Buffer.from(pdfBytes);
+      
+      await uploadPDFToDrive(pdfBuffer, filename);
+
+      await supabase.from('documents').insert({
+        application_id: applicationId,
+        filename: filename,
+        url: ' ',
+        mime_type: 'application/pdf',
+        size_bytes: pdfBytes.length,
+        uploaded_by_user_id: user.id,
+      });
+
+    } catch (pdfError) {
+      console.error('PDF generation failed:', pdfError);
+      throw new Error(`Failed to generate PDF: ${pdfError instanceof Error ? pdfError.message : 'Unknown error'}`);
+    }
 
     const passportScanFile = formData.get('passportScan') as File | null;
     
@@ -235,7 +306,7 @@ export async function POST(req: Request) {
           uploaded_by_user_id: user.id,
         });
       } catch (passportError) {
-        console.error('Failed to upload passport scan', passportError);
+        console.error('Passport upload failed:', passportError);
       }
     }
 
@@ -258,7 +329,7 @@ export async function POST(req: Request) {
           uploaded_by_user_id: user.id,
         });
       } catch (wardenError) {
-        console.error('Failed to upload warden letter', wardenError);
+        console.error('Warden letter upload failed:', wardenError);
       }
     }
 
@@ -269,6 +340,7 @@ export async function POST(req: Request) {
     });
 
   } catch (error) {
+    console.error('Submit failed:', error);
     
     return NextResponse.json(
       { 
