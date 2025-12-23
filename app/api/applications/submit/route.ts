@@ -191,7 +191,31 @@ export async function POST(req: Request) {
       pending_charges: false,
       ssn_full: getString('ssnFull') || getString('ssnFirstFive') || undefined,
     };
+// After line 205, before try block:
+const fs = require('fs');
+const path = require('path');
 
+const oldPath = path.join(process.cwd(), 'public', 'templates', 'CDCR_2311_blank.pdf');
+const newPath = path.join(process.cwd(), 'lib', 'assets', 'CDCR_2311_blank.pdf');
+
+const debugInfo = {
+  cwd: process.cwd(),
+  oldPathExists: fs.existsSync(oldPath),
+  newPathExists: fs.existsSync(newPath),
+  libContents: fs.existsSync(path.join(process.cwd(), 'lib')) 
+    ? fs.readdirSync(path.join(process.cwd(), 'lib')) 
+    : 'lib dir not found',
+  libAssetsContents: fs.existsSync(path.join(process.cwd(), 'lib', 'assets'))
+    ? fs.readdirSync(path.join(process.cwd(), 'lib', 'assets'))
+    : 'assets dir not found'
+};
+
+if (!debugInfo.newPathExists) {
+  return NextResponse.json({ 
+    error: 'DEBUG: File still not in deployment',
+    debug: debugInfo 
+  }, { status: 500 });
+}
     try {
       const pdfDoc = await loadBlank2311();
       await fill2311(pdfDoc, pdfRecord);
