@@ -4,14 +4,28 @@ import { Readable } from 'stream';
 const SCOPES = ['https://www.googleapis.com/auth/drive.file'];
 
 function getDriveClient() {
-  const privateKey = Buffer.from(
-    process.env.GOOGLE_PRIVATE_KEY_BASE64!,
-    'base64'
-  ).toString('utf-8');
+  if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL) {
+    throw new Error('GOOGLE_SERVICE_ACCOUNT_EMAIL is not set');
+  }
+  
+  if (!process.env.GOOGLE_PRIVATE_KEY_BASE64) {
+    throw new Error('GOOGLE_PRIVATE_KEY_BASE64 is not set');
+  }
+
+  let privateKey: string;
+  
+  try {
+    privateKey = Buffer.from(
+      process.env.GOOGLE_PRIVATE_KEY_BASE64,
+      'base64'
+    ).toString('utf-8');
+  } catch (error) {
+    throw new Error('Failed to decode GOOGLE_PRIVATE_KEY_BASE64');
+  }
 
   const auth = new google.auth.GoogleAuth({
     credentials: {
-      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL!,
+      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
       private_key: privateKey,
     },
     scopes: SCOPES,
@@ -24,44 +38,11 @@ export async function uploadPDFToDrive(
   pdfBuffer: Buffer,
   filename: string
 ): Promise<{ fileId: string; webViewLink: string }> {
-  console.log('=== UPLOAD TO DRIVE START ===');
-  console.log('🔍 Input parameters:', {
-    pdfBufferExists: !!pdfBuffer,
-    pdfBufferType: typeof pdfBuffer,
-    pdfBufferIsBuffer: Buffer.isBuffer(pdfBuffer),
-    pdfBufferLength: pdfBuffer?.length,
-    filenameExists: !!filename,
-    filename: filename,
-  });
-  
   try {
-    console.log('🔑 Checking environment variables...');
-    console.log('Environment check:', {
-      hasServiceEmail: !!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      hasPrivateKeyBase64: !!process.env.GOOGLE_PRIVATE_KEY_BASE64,
-      hasFolderId: !!process.env.GOOGLE_DRIVE_FOLDER_ID,
-      serviceEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      privateKeyBase64Length: process.env.GOOGLE_PRIVATE_KEY_BASE64?.length,
-      folderId: process.env.GOOGLE_DRIVE_FOLDER_ID,
-    });
-
-    console.log('🔧 Creating Drive client...');
     const drive = getDriveClient();
-    console.log('✅ Drive client created');
-    
     const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID!;
-    
-    console.log('🌊 Creating stream from buffer...');
-    console.log('Buffer before stream:', {
-      exists: !!pdfBuffer,
-      type: typeof pdfBuffer,
-      length: pdfBuffer?.length,
-    });
-    
     const stream = Readable.from(pdfBuffer);
-    console.log('✅ Stream created');
 
-    console.log('☁️ Calling Drive API...');
     const response = await drive.files.create({
       requestBody: {
         name: filename,
@@ -76,18 +57,11 @@ export async function uploadPDFToDrive(
       supportsAllDrives: true,
     });
 
-    console.log('✅ Drive API response received');
     const fileId = response.data.id!;
     const webViewLink = response.data.webViewLink!;
-    console.log('📁 File uploaded:', { fileId, webViewLink });
 
-    console.log('=== UPLOAD TO DRIVE COMPLETE ===');
     return { fileId, webViewLink };
-    
   } catch (error: unknown) {
-    console.error('❌ Upload to Drive failed');
-    console.error('Error details:', error);
-    
     if (
       error &&
       typeof error === 'object' &&
@@ -104,7 +78,6 @@ export async function uploadPDFToDrive(
     }
     
     const message = error instanceof Error ? error.message : 'Unknown error';
-    console.error('Throwing error:', message);
     throw new Error(`Failed to upload: ${message}`);
   }
 }
@@ -115,8 +88,7 @@ export async function deleteFileFromDrive(fileId: string): Promise<void> {
     await drive.files.delete({ 
       fileId,
       supportsAllDrives: true,
-    })
-
+    });
   } catch (error: unknown) {
     throw error instanceof Error ? error : new Error('Failed to delete file from Drive');
   }

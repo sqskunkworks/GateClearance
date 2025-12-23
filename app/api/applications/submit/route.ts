@@ -193,89 +193,39 @@ export async function POST(req: Request) {
     };
 
     // Generate and upload main PDF
-  // Generate and upload main PDF
-try {
-  console.log('=== PDF GENERATION START ===');
-  console.log('📋 PDF Record:', JSON.stringify(pdfRecord, null, 2));
-  
-  console.log('📄 Step 1: Loading PDF template...');
-  const pdfDoc = await loadBlank2311();
-  console.log('✅ PDF template loaded successfully');
-  
-  console.log('✍️ Step 2: Filling PDF with data...');
-  await fill2311(pdfDoc, pdfRecord);
-  console.log('✅ PDF filled successfully');
-  
-  console.log('💾 Step 3: Saving PDF...');
-  const pdfBytes = await pdfDoc.save();
-  console.log('✅ PDF saved, checking result...');
-  console.log('🔍 PDF Bytes check:', {
-    exists: !!pdfBytes,
-    type: typeof pdfBytes,
-    isUint8Array: pdfBytes instanceof Uint8Array,
-    length: pdfBytes?.length,
-    firstFewBytes: pdfBytes ? Array.from(pdfBytes.slice(0, 10)) : null,
-  });
-  
-  if (!pdfBytes || pdfBytes.length === 0) {
-    throw new Error('PDF generation returned empty buffer');
-  }
-  
-  console.log('🔄 Step 4: Converting to Buffer...');
-  const pdfBuffer = Buffer.from(pdfBytes);
-  console.log('🔍 Buffer check:', {
-    exists: !!pdfBuffer,
-    type: typeof pdfBuffer,
-    isBuffer: Buffer.isBuffer(pdfBuffer),
-    length: pdfBuffer?.length,
-    firstFewBytes: pdfBuffer ? Array.from(pdfBuffer.slice(0, 10)) : null,
-  });
-  
-  const filename = `CDCR_2311_${formDataObj.firstName}_${formDataObj.lastName}_${applicationId}.pdf`;
-  console.log('📝 Filename:', filename);
-  
-  console.log('☁️ Step 5: Uploading to Google Drive...');
-  console.log('🔍 Upload parameters:', {
-    bufferExists: !!pdfBuffer,
-    bufferType: typeof pdfBuffer,
-    bufferLength: pdfBuffer?.length,
-    filename: filename,
-  });
-  
-  await uploadPDFToDrive(pdfBuffer, filename);
-  console.log('✅ Upload to Drive successful');
+    try {
+      const pdfDoc = await loadBlank2311();
+      await fill2311(pdfDoc, pdfRecord);
+      const pdfBytes = await pdfDoc.save();
+      
+      if (!pdfBytes || pdfBytes.length === 0) {
+        throw new Error('PDF generation returned empty buffer');
+      }
+      
+      const filename = `CDCR_2311_${formDataObj.firstName}_${formDataObj.lastName}_${applicationId}.pdf`;
+      const pdfBuffer = Buffer.from(pdfBytes);
+      
+      await uploadPDFToDrive(pdfBuffer, filename);
 
-  console.log('💾 Step 6: Saving to database...');
-  await supabase.from('documents').insert({
-    application_id: applicationId,
-    filename: filename,
-    url: ' ',
-    mime_type: 'application/pdf',
-    size_bytes: pdfBytes.length,
-    uploaded_by_user_id: user.id,
-  });
-  console.log('✅ Database record saved');
-  
-  console.log('=== PDF GENERATION COMPLETE ===');
+      await supabase.from('documents').insert({
+        application_id: applicationId,
+        filename: filename,
+        url: ' ',
+        mime_type: 'application/pdf',
+        size_bytes: pdfBytes.length,
+        uploaded_by_user_id: user.id,
+      });
 
-} catch (pdfError) {
-  console.error('❌ PDF generation failed at some step');
-  console.error('Error details:', pdfError);
-  console.error('Error type:', typeof pdfError);
-  console.error('Error constructor:', pdfError?.constructor?.name);
-  if (pdfError instanceof Error) {
-    console.error('Error message:', pdfError.message);
-    console.error('Error stack:', pdfError.stack);
-  }
-  throw new Error(`Failed to generate PDF: ${pdfError instanceof Error ? pdfError.message : 'Unknown error'}`);
-}
+    } catch (pdfError) {
+      console.error('PDF generation failed:', pdfError);
+      throw new Error(`Failed to generate PDF: ${pdfError instanceof Error ? pdfError.message : 'Unknown error'}`);
+    }
 
     // Upload passport scan if applicable
     const passportScanFile = formData.get('passportScan');
     
     if (getString('governmentIdType') === 'passport') {
       if (!passportScanFile || !(passportScanFile instanceof File)) {
-        console.error('❌ Passport required but file is missing');
         return NextResponse.json(
           { error: 'Passport scan is required when using passport as ID' },
           { status: 400 }
@@ -283,7 +233,6 @@ try {
       }
       
       try {
-        console.log('📄 Processing passport upload...');
         const passportBuffer = Buffer.from(await passportScanFile.arrayBuffer());
         
         if (!passportBuffer || passportBuffer.length === 0) {
@@ -299,7 +248,6 @@ try {
         
         const passportFilename = `Passport_${formDataObj.firstName}_${formDataObj.lastName}_${applicationId}.${extension}`;
         
-        console.log('☁️ Uploading passport to Drive...');
         await uploadPDFToDrive(passportBuffer, passportFilename);
         
         await supabase.from('documents').insert({
@@ -311,9 +259,8 @@ try {
           uploaded_by_user_id: user.id,
         });
         
-        console.log('✅ Passport uploaded successfully');
       } catch (passportError) {
-        console.error('❌ Passport upload failed:', passportError);
+        console.error('Passport upload failed:', passportError);
         return NextResponse.json(
           { error: 'Failed to upload passport scan', details: passportError instanceof Error ? passportError.message : 'Unknown error' },
           { status: 500 }
@@ -326,7 +273,6 @@ try {
     
     if (getString('formerInmate') === 'yes') {
       if (!wardenLetterFile || !(wardenLetterFile instanceof File)) {
-        console.error('❌ Warden letter required but file is missing');
         return NextResponse.json(
           { error: 'Warden letter is required for former inmates' },
           { status: 400 }
@@ -334,7 +280,6 @@ try {
       }
       
       try {
-        console.log('📄 Processing warden letter upload...');
         const wardenBuffer = Buffer.from(await wardenLetterFile.arrayBuffer());
         
         if (!wardenBuffer || wardenBuffer.length === 0) {
@@ -344,7 +289,6 @@ try {
         const extension = wardenLetterFile.type.includes('pdf') ? 'pdf' : 'jpg';
         const wardenFilename = `WardenLetter_${formDataObj.firstName}_${formDataObj.lastName}_${applicationId}.${extension}`;
         
-        console.log('☁️ Uploading warden letter to Drive...');
         await uploadPDFToDrive(wardenBuffer, wardenFilename);
         
         await supabase.from('documents').insert({
@@ -356,9 +300,8 @@ try {
           uploaded_by_user_id: user.id,
         });
         
-        console.log('✅ Warden letter uploaded successfully');
       } catch (wardenError) {
-        console.error('❌ Warden letter upload failed:', wardenError);
+        console.error('Warden letter upload failed:', wardenError);
         return NextResponse.json(
           { error: 'Failed to upload warden letter', details: wardenError instanceof Error ? wardenError.message : 'Unknown error' },
           { status: 500 }
@@ -373,7 +316,7 @@ try {
     });
 
   } catch (error) {
-    console.error('❌ Submit failed:', error);
+    console.error('Submit failed:', error);
     
     return NextResponse.json(
       { 
