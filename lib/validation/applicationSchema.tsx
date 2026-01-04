@@ -25,7 +25,6 @@ const isFutureDate = (dateStr: string) => {
   return date >= today;
 };
 
-
 const isExpiringWithin30Days = (dateStr: string) => {
   if (!isValidDate(dateStr)) return false;
   const [mm, dd, yyyy] = dateStr.split('-').map(Number);
@@ -202,7 +201,7 @@ export const rulesSchema = z.object({
       'Only SkunkWorks-related materials with approval are permitted'
     ),
   
-  acknowledgmentAgreement: z.literal(true),
+    acknowledgmentAgreement: z.literal(true),
 });
 
 // ============================================
@@ -212,10 +211,24 @@ export const securitySchema = z
   .object({
     governmentIdType: z.enum(['driver_license', 'passport']),
     
+    // ========== FIELD-LEVEL VALIDATION: Triggers on blur ==========
     governmentIdNumber: z
       .string()
       .min(1, 'Please enter your government ID number')
-      .max(50, 'ID number is too long (maximum 50 characters)'),
+      .max(50, 'ID number is too long (maximum 50 characters)')
+      .refine(
+        (val) => {
+          if (!val) return true; // Let .min() handle empty validation
+          const cleaned = val.replace(/[\s-]/g, '');
+          // Accept either Driver's License OR Passport format at field level
+          // Driver's License: 1-2 letters + 6-15 digits, or 8-15 digits only
+          const isDL = /^([A-Z]{1,2}\d{6,15}|\d{8,15})$/i.test(cleaned);
+          // Passport: 6-9 alphanumeric
+          const isPassport = /^[A-Z0-9]{6,9}$/i.test(cleaned);
+          return isDL || isPassport;
+        },
+        'Please enter a valid ID number (letters and numbers only, 6-15 characters)'
+      ),
     
     governmentIdNumberConfirm: z
       .string()
@@ -236,8 +249,13 @@ export const securitySchema = z
       .refine(
         isFutureDate,
         'Your ID has expired. Please renew it before submitting this application'
+      )
+      .refine(
+        (val) => !isExpiringWithin30Days(val),
+        'Your ID must be valid for at least 30 days. Please renew your ID before applying.'
       ),
-      passportScan: z.instanceof(File).optional(),
+      
+    passportScan: z.instanceof(File).optional(),
     
     ssnMethod: z.enum(['direct', 'call', 'split']),
     
@@ -254,13 +272,44 @@ export const securitySchema = z
     onParole: z.enum(['yes', 'no']),
     
     confirmAccuracy: z.literal(true),
+
+
     
     digitalSignature: z
       .string()
       .min(1, 'Please provide your digital signature'),
     
-    consentToDataUse: z.literal(true),
+      consentToDataUse: z.literal(true),
   })
+  // ========== SCHEMA-LEVEL VALIDATIONS: Run on submit ==========
+  .refine(
+    (data) => {
+      if (data.governmentIdType === 'driver_license') {
+        const cleaned = data.governmentIdNumber.replace(/[\s-]/g, '');
+        // Driver's License: 1-2 letters followed by 6-15 digits, or 8-15 digits only
+        return /^([A-Z]{1,2}\d{6,15}|\d{8,15})$/i.test(cleaned);
+      }
+      return true;
+    },
+    {
+      message: "Driver's License must be in valid format (e.g., D1234567, 12345678) - only letters, numbers, spaces and dashes allowed",
+      path: ['governmentIdNumber'],
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.governmentIdType === 'passport') {
+        const cleaned = data.governmentIdNumber.replace(/[\s-]/g, '');
+        // Passport: 6-9 alphanumeric characters
+        return /^[A-Z0-9]{6,9}$/i.test(cleaned);
+      }
+      return true;
+    },
+    {
+      message: 'Passport number must be 6-9 characters (only letters and numbers allowed, e.g., 123456789 or N12345678)',
+      path: ['governmentIdNumber'],
+    }
+  )
   .refine(
     (data) => {
       if (data.governmentIdType === 'driver_license') {
@@ -359,54 +408,44 @@ export const securitySchema = z
       message: 'Please upload a letter from the Warden (required for former inmates)',
       path: ['wardenLetter'],
     }
-  )// After the wardenLetter refinement, add these 4 new refinements:
-
-.refine(
-  (data) => {
-    return !isExpiringWithin30Days(data.idExpiration);
-  },
-  {
-    message: 'Your ID must be valid for at least 30 days. Please renew your ID before applying.',
-    path: ['idExpiration'],
-  }
-)
-.refine(
-  (data) => {
-    if (data.governmentIdType === 'passport') {
-      return data.passportScan instanceof File;
+  )
+  .refine(
+    (data) => {
+      if (data.governmentIdType === 'passport') {
+        return data.passportScan instanceof File;
+      }
+      return true;
+    },
+    {
+      message: 'Please upload a scan of your passport (required for passport holders)',
+      path: ['passportScan'],
     }
-    return true;
-  },
-  {
-    message: 'Please upload a scan of your passport (required for passport holders)',
-    path: ['passportScan'],
-  }
-)
-.refine(
-  (data) => {
-    if (data.passportScan instanceof File) {
-      return data.passportScan.size <= 5 * 1024 * 1024; // 5MB
+  )
+  .refine(
+    (data) => {
+      if (data.passportScan instanceof File) {
+        return data.passportScan.size <= 5 * 1024 * 1024; // 5MB
+      }
+      return true;
+    },
+    {
+      message: 'Passport scan must be less than 5MB',
+      path: ['passportScan'],
     }
-    return true;
-  },
-  {
-    message: 'Passport scan must be less than 5MB',
-    path: ['passportScan'],
-  }
-)
-.refine(
-  (data) => {
-    if (data.passportScan instanceof File) {
-      const validTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
-      return validTypes.includes(data.passportScan.type);
+  )
+  .refine(
+    (data) => {
+      if (data.passportScan instanceof File) {
+        const validTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+        return validTypes.includes(data.passportScan.type);
+      }
+      return true;
+    },
+    {
+      message: 'Passport scan must be a PDF, JPG, or PNG file',
+      path: ['passportScan'],
     }
-    return true;
-  },
-  {
-    message: 'Passport scan must be a PDF, JPG, or PNG file',
-    path: ['passportScan'],
-  }
-);
+  );
 
 // ============================================
 // FULL APPLICATION SCHEMA
