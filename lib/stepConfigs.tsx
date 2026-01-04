@@ -279,6 +279,9 @@ export const rulesConfig: SectionConfig = {
 // ============================================
 // STEP 5: SECURITY CLEARANCE
 // ============================================
+// ============================================
+// STEP 5: SECURITY CLEARANCE
+// ============================================
 export const securityConfig: SectionConfig = {
   title: 'Security Clearance Information',
   subtitle: 'Provide the ID details used for CDCR clearance.',
@@ -397,7 +400,7 @@ export const securityConfig: SectionConfig = {
       required: true,
       accept: '.pdf,.jpg,.jpeg,.png',
       helpText: 'Please upload a letter from the Warden approving your visit (PDF, JPG, or PNG, max 5MB)',
-      showIf: (values: Record<string, unknown>) => values.formerInmate === 'yes',  // ← Changed from 'condition' to 'showIf'
+      showIf: (values: Record<string, unknown>) => values.formerInmate === 'yes',
     },
     {
       kind: 'radio',
@@ -420,13 +423,11 @@ export const securityConfig: SectionConfig = {
       name: 'digitalSignature',
       label: 'Please sign inside the box (digital signature)',
       required: true,
-      span: 2,
     },
     {
       kind: 'checkbox',
       name: 'consentToDataUse',
-      label:
-        'I consent to the use of my information solely for security clearance and entry to San Quentin SkunkWorks (impact answers may be used anonymously).',
+      label: 'I consent to the use of my information solely for security clearance and entry to San Quentin SkunkWorks (impact answers may be used anonymously).',
       required: true,
     },
   ],

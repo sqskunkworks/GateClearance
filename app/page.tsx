@@ -46,11 +46,31 @@ export default async function HomePage() {
       <main className="max-w-5xl mx-auto px-4 py-12">
         <div className="text-center mb-12">
           <h2 className="text-4xl font-bold text-gray-900 mb-4">
-            Gate Clearance Application
+            Secure Gate Clearance Application
           </h2>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Apply for authorized access to San Quentin Skunkworks, an innovation lab at San Quentin State Prison.
+          <p className="text-xl text-gray-600 max-w-2xl mx-auto mb-6">
+            Apply for gate clearance to visit San Quentin Skunkworks at San Quentin State Prison.
           </p>
+          
+          {/* Security Notice with Lock Icon */}
+          <div className="flex items-center justify-center gap-2 text-sm text-gray-700 bg-green-50 border border-green-200 rounded-lg px-4 py-3 max-w-2xl mx-auto">
+            <svg 
+              className="w-5 h-5 text-green-600 flex-shrink-0" 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth={2} 
+                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" 
+              />
+            </svg>
+            <span>
+              Your information is encrypted and used only for CDCR gate clearance processing.
+            </span>
+          </div>
         </div>
 
         {/* Process Overview */}
@@ -65,18 +85,22 @@ export default async function HomePage() {
             <div className="flex gap-4">
               <div>
                 <p className="text-gray-600 text-sm">
+                  <strong>Submit at least 14 business days before your visit.</strong>
+                </p>
+                <p className="text-gray-600 text-sm mt-2">
+                  <strong>You'll need your legal name, SSN, and a valid ID.</strong>
+                </p>
+                <p className="text-gray-600 text-sm mt-2">
                   Complete the online form with your personal information, organization details, and background verification.
                 </p>
               </div>
             </div>
-
           </div>
         </div>
 
         {/* User Status & CTA */}
         {user ? (
           <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 mb-8">
-
             <Link
               href="/test-application/1"
               className="inline-block px-8 py-4 bg-black text-white rounded-xl font-semibold text-lg hover:bg-gray-800 transition-colors"
@@ -90,7 +114,7 @@ export default async function HomePage() {
               href="/auth/signup"
               className="px-8 py-4 bg-black text-white rounded-xl font-semibold text-lg hover:bg-gray-800 transition-colors text-center"
             >
-              Sign Up to Apply
+              Apply
             </Link>
             <Link
               href="/auth/login"
@@ -111,8 +135,8 @@ export default async function HomePage() {
       {/* Footer */}
       <footer className="border-t mt-16 py-8">
         <div className="max-w-5xl mx-auto px-4 text-center text-sm text-gray-600">
-          <p>For assistance, contact: <a href="mailto:clearance@sqskunkworks.com" className="text-black font-semibold hover:underline">clearance@sqskunkworks.com</a></p>
-          <p className="mt-2">© 2024 SQ Skunkworks. All rights reserved.</p>
+          <p>For assistance, contact: <a href="mailto:devs@sqskunkworks.com" className="text-black font-semibold hover:underline">devs@sqskunkworks.com</a></p>
+          <p className="mt-2">© 2026 SQ Skunkworks. All rights reserved.</p>
         </div>
       </footer>
     </div>
