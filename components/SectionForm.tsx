@@ -4,26 +4,22 @@ import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, AlertTriangle, ArrowLeft } from 'lucide-react';
 import SignaturePad, { SignaturePadHandle } from '@/components/SignaturePad';
+import { RulesCollapsible } from '@/components/RulesCollapsible';
 import { z } from 'zod';
 import { getErrorMessages } from '@/lib/validation/applicationSchema';
 
 /* ======= Helper Functions ======= */
 const formatPhoneNumber = (value: string): string => {
-  // Remove all non-digit characters
   const digits = value.replace(/\D/g, '');
   
-  // Handle international format
   if (digits.startsWith('1') && digits.length === 11) {
-    // US number with country code: +1 (415) 555-1234
     return `+1 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7, 11)}`;
   }
   
-  // Handle 10-digit US number
   if (digits.length === 10) {
     return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
   }
   
-  // Handle partial input
   if (digits.length > 6) {
     return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
   }
@@ -35,6 +31,36 @@ const formatPhoneNumber = (value: string): string => {
   }
   
   return value;
+};
+
+const formatDate = (value: string): string => {
+  const digits = value.replace(/\D/g, '');
+  
+  if (digits.length >= 8) {
+    return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4, 8)}`;
+  }
+  if (digits.length >= 4) {
+    return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4)}`;
+  }
+  if (digits.length >= 2) {
+    return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+  }
+  
+  return digits;
+};
+
+const formatGovernmentId = (value: string, idType: string): string => {
+  const cleaned = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  
+  if (idType === 'driver_license') {
+    if (cleaned.length > 1 && /^[A-Z]{1,2}/.test(cleaned)) {
+      const letters = cleaned.match(/^[A-Z]{1,2}/)?.[0] || '';
+      const numbers = cleaned.slice(letters.length);
+      return numbers ? `${letters}-${numbers}` : letters;
+    }
+  }
+  
+  return cleaned;
 };
 
 /* ============================
@@ -152,7 +178,6 @@ const ErrorCallout = ({ title, points }: { title?: string; points: string[] }) =
   </AnimatePresence>
 );
 
-/* ======= Toast Notification ======= */
 const Toast = ({ message, onClose }: { message: string; onClose: () => void }) => (
   <motion.div
     initial={{ opacity: 0, y: 50 }}
@@ -187,39 +212,48 @@ function SignatureField({
   onSaveSuccess?: () => void;
 }) {
   const padRef = useRef<SignaturePadHandle>(null);
+  const hasShownToast = useRef(false);
 
-  const handleSave = () => {
+  const handleEnd = () => {
     const pad = padRef.current;
     if (!pad) return;
+    
     if (pad.isEmpty()) {
       onChange('');
       return;
     }
-    onChange(pad.toDataURL());
-    onSaveSuccess?.();
+    
+    const dataUrl = pad.toDataURL();
+    onChange(dataUrl);
+    
+    if (!hasShownToast.current && onSaveSuccess) {
+      onSaveSuccess();
+      hasShownToast.current = true;
+    }
   };
 
   return (
     <div>
-      <SignaturePad ref={padRef} height={height ?? 160} />
+      <SignaturePad 
+        ref={padRef} 
+        height={height ?? 160}
+        onEnd={handleEnd}
+      />
       <div className="mt-3 flex gap-2">
-        <button 
-          type="button" 
-          className="rounded-xl bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 transition-colors" 
-          onClick={handleSave}
-        >
-          Save Signature
-        </button>
         <button
           type="button"
           className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50 transition-colors"
           onClick={() => {
             padRef.current?.clear();
             onChange('');
+            hasShownToast.current = false;
           }}
         >
-          Clear
+          Clear Signature
         </button>
+        <span className="text-xs text-gray-600 self-center ml-2">
+          ✓ Signature saves automatically
+        </span>
       </div>
     </div>
   );
@@ -258,13 +292,11 @@ export function SectionForm({
     const displayErrors: Record<string, string> = {};
     
     Object.keys(zodErrors).forEach((key) => {
-      // BEFORE first submit attempt: Show errors for any touched field
       if (!submitAttempted) {
         if (touched[key]) {
           displayErrors[key] = zodErrors[key];
         }
       } else {
-        // AFTER first submit attempt: Show ALL errors
         displayErrors[key] = zodErrors[key];
       }
     });
@@ -298,13 +330,11 @@ export function SectionForm({
     setTouched((prev) => {
       const newTouched = { ...prev, [fieldName]: true };
       
-      // If this is a confirm field, mark the original field as touched too
       if (fieldName.endsWith('Confirm')) {
         const originalField = fieldName.replace('Confirm', '');
         newTouched[originalField] = true;
       }
       
-      // If this is an original field, mark the confirm field as touched too (if it exists and has value)
       const confirmField = `${fieldName}Confirm`;
       if (config.fields.some(f => f.name === confirmField) && values[confirmField]) {
         newTouched[confirmField] = true;
@@ -322,10 +352,8 @@ export function SectionForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     
-    // Mark that user attempted to submit
     setSubmitAttempted(true);
     
-    // Touch all fields so errors show
     const allTouched: Record<string, boolean> = {};
     config.fields.forEach((f) => {
       allTouched[f.name] = true;
@@ -333,7 +361,6 @@ export function SectionForm({
     setTouched(allTouched);
 
     if (!canSubmit) {
-      // Scroll to first error
       const firstErrorField = Object.keys(zodErrors)[0];
       if (firstErrorField) {
         const element = document.getElementById(firstErrorField);
@@ -416,9 +443,16 @@ export function SectionForm({
             onChange={(e) => {
               let newValue = e.target.value;
               
-              // Auto-format phone numbers
               if (f.kind === 'tel') {
                 newValue = formatPhoneNumber(newValue);
+              }
+              
+              if (f.kind === 'date') {
+                newValue = formatDate(newValue);
+              }
+              
+              if ((f.name === 'governmentIdNumber' || f.name === 'governmentIdNumberConfirm') && values.governmentIdType) {
+                newValue = formatGovernmentId(newValue, values.governmentIdType as string);
               }
               
               setValues((v) => ({ ...v, [f.name]: newValue }));
@@ -448,7 +482,17 @@ export function SectionForm({
                       className="h-4 w-4 accent-black cursor-pointer"
                       checked={selected}
                       onChange={() => {
-                        setValues((v) => ({ ...v, [f.name]: opt.value }));
+                        if (f.name === 'ssnMethod') {
+                          const newValues: FormValues = { ...values, [f.name]: opt.value };
+                          delete newValues.ssnVerifiedByPhone;
+                          delete newValues.ssnFull;
+                          delete newValues.ssnFullConfirm;
+                          delete newValues.ssnFirstFive;
+                          delete newValues.ssnFirstFiveConfirm;
+                          setValues(newValues);
+                        } else {
+                          setValues((v) => ({ ...v, [f.name]: opt.value }));
+                        }
                         handleBlur(f.name);
                       }}
                     />
@@ -470,8 +514,8 @@ export function SectionForm({
               checked={Boolean(values[f.name])}
               onChange={(e) => {
                 setValues((v) => ({ ...v, [f.name]: e.target.checked }));
-                handleBlur(f.name);
               }}
+              onBlur={() => handleBlur(f.name)}
             />
             <span>
               {f.label}
@@ -543,6 +587,8 @@ export function SectionForm({
       <SectionHeader title={config.title} subtitle={config.subtitle} icon={config.icon} />
 
       <div className="mx-auto max-w-3xl space-y-6 px-4 py-6">
+        {currentStep === 4 && <RulesCollapsible />}
+        
         <Card>
           <div className={`grid grid-cols-1 gap-5 ${cols === 2 ? 'md:grid-cols-2' : 'md:grid-cols-1'}`}>
             {renderedFields}
@@ -558,10 +604,8 @@ export function SectionForm({
         <div className="h-24" />
       </div>
 
-      {/* Bottom Action Bar */}
       <div className="fixed inset-x-0 bottom-0 border-t border-gray-200 bg-white/95 backdrop-blur shadow-lg">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-4 py-4">
-          {/* Back Button - Matches Continue Style */}
           {onBack && (
             <button
               type="button"
@@ -573,10 +617,8 @@ export function SectionForm({
             </button>
           )}
 
-          {/* Spacer */}
           <div className="flex-1"></div>
 
-          {/* Continue Button */}
           <button
             type="submit"
             disabled={!canSubmit}
@@ -591,7 +633,6 @@ export function SectionForm({
         </div>
       </div>
 
-      {/* Toast Notification */}
       <AnimatePresence>
         {showToast && (
           <Toast 

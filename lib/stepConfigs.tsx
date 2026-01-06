@@ -25,7 +25,7 @@ export const personalConfig: SectionConfig = {
     {
       kind: 'date',
       name: 'dateOfBirth',
-      label: 'Date of birth (MM-DD-YYYY)',
+      label: 'Date of birth',
       required: true,
       placeholder: 'MM-DD-YYYY',
     },
@@ -62,12 +62,12 @@ export const contactOrgConfig: SectionConfig = {
       name: 'phoneNumber',
       label: 'Phone number',
       required: true,
-      placeholder: '415-555-1234 or +27 82 123 4567',
+      placeholder: '(415) 555-1234',
     },
     {
       kind: 'date',
       name: 'visitDate',
-      label: 'Preferred visit date (MM-DD-YYYY, optional)',
+      label: 'Preferred visit date (optional)',
       placeholder: 'MM-DD-YYYY',
     },
     { kind: 'text', name: 'companyOrOrganization', label: 'Company / Organization', required: true },
@@ -75,6 +75,7 @@ export const contactOrgConfig: SectionConfig = {
       kind: 'textarea',
       name: 'purposeOfVisit',
       label: 'Purpose of visit',
+      helpText: 'Please write at least 10 characters',
       required: true,
       rows: 4,
       span: 2,
@@ -111,6 +112,7 @@ export const experienceConfig: SectionConfig = {
       kind: 'textarea',
       name: 'perceptions',
       label: 'What comes to mind when you think about incarcerated people?',
+      helpText: 'Please write at least 20 characters',
       required: true,
       rows: 4,
     },
@@ -118,6 +120,7 @@ export const experienceConfig: SectionConfig = {
       kind: 'textarea',
       name: 'expectations',
       label: 'What do you expect to experience during your visit to SkunkWorks?',
+      helpText: 'Please write at least 20 characters',
       required: true,
       rows: 4,
     },
@@ -138,6 +141,7 @@ export const experienceConfig: SectionConfig = {
       kind: 'textarea',
       name: 'interestsMost',
       label: 'What interests you most about this visit?',
+      helpText: 'Please write at least 20 characters',
       required: true,
       rows: 4,
     },
@@ -164,121 +168,25 @@ export const experienceConfig: SectionConfig = {
 };
 
 // ============================================
-// STEP 4: RULES & ACKNOWLEDGMENT
+// STEP 4: RULES & ACKNOWLEDGMENT (SIMPLIFIED)
 // ============================================
 export const rulesConfig: SectionConfig = {
   title: 'Review & Acknowledgment',
-  subtitle: 'Confirm your understanding of key rules before your visit.',
+  subtitle: 'Please review the rules before your visit.',
   icon: <Shield className="h-6 w-6" />,
   zodSchema: rulesSchema,
   columns: 1,
   ctaLabel: 'Continue',
   fields: [
     {
-      kind: 'radio',
-      name: 'rulesColor',
-      label: 'Choose an allowed color to wear for your visit',
-      required: true,
-      options: [
-        { label: 'Blue', value: 'Blue' },
-        { label: 'Green', value: 'Green' },
-        { label: 'Yellow', value: 'Yellow' },
-        { label: 'Orange', value: 'Orange' },
-        { label: 'Gray', value: 'Gray' },
-        { label: 'Black', value: 'Black' },
-      ],
-      correctValue: 'Black',
-      wrongCallout: {
-        title: 'That is incorrect. Please review:',
-        points: [
-          'No blue, green, yellow, orange, or gray in any shade.',
-          'No denim, sweats, shorts, or sleeveless shirts.',
-          'No revealing or form-fitting attire.',
-          'Dress professionally or business casual.',
-          'No white T-shirts.',
-          'When in doubt, wear black. Black is always a safe choice.',
-        ],
-      },
-    },
-    {
-      kind: 'radio',
-      name: 'rulesPhonePolicy',
-      label: 'What should you do with your phone, Apple Watch, and keys before entering?',
-      required: true,
-      options: [
-        { label: 'Bring them inside but keep them in your pocket', value: 'Bring inside' },
-        { label: 'Leave them in your car or (on bus) check at East Gate', value: 'Leave in car / check at East Gate' },
-        { label: 'Place them in a clear bag and carry into the facility', value: 'Clear bag inside' },
-      ],
-      correctValue: 'Leave in car / check at East Gate',
-      wrongCallout: {
-        title: 'Incorrect: Please review',
-        points: [
-          'No phones, wallets, keys, or electronic devices inside (including smart watches).',
-          'Leave these items in your car or check them at the East Gate if using public transport.',
-          'Only a clear plastic water bottle is allowed; no bags/food/drinks.',
-        ],
-      },
-    },
-    {
-      kind: 'radio',
-      name: 'rulesShareContact',
-      label: 'What should you do if asked to share your contact information?',
-      required: true,
-      options: [
-        { label: 'Direct to publicly available email or social handles', value: 'Direct to public handles' },
-        {
-          label: 'Politely decline and ask the Impact Team President (Kai) and your Escort',
-          value: 'Politely decline + ask Kai/Escort',
-        },
-        { label: 'Accept contact details and keep them confidential', value: 'Accept + keep confidential' },
-      ],
-      correctValue: 'Politely decline + ask Kai/Escort',
-      wrongCallout: {
-        title: 'Incorrect: Please review',
-        points: [
-          'Exchange of contact info must be approved by the Impact Team President and the escort.',
-          'Do not accept contact details from incarcerated people.',
-          'If approached, get approval from Kai Bannon and your Escort.',
-        ],
-      },
-    },
-    {
-      kind: 'radio',
-      name: 'rulesWrittenMaterials',
-      label: 'Which written materials can you bring or receive?',
-      required: true,
-      options: [
-        { label: 'Personal business cards', value: 'Personal business cards' },
-        { label: 'Contact information cards', value: 'Contact information cards' },
-        {
-          label: 'Materials directly related to SkunkWorks (with approval)',
-          value: 'Materials related to SkunkWorks with approval',
-        },
-        { label: 'Personal notes', value: 'Personal notes' },
-      ],
-      correctValue: 'Materials related to SkunkWorks with approval',
-      wrongCallout: {
-        title: 'Incorrect: Please review',
-        points: [
-          'No personal paperwork, business cards, or contact cards.',
-          'Only materials directly related to SkunkWorks are permitted.',
-          'Any exchange must have explicit approval from the Impact Team President and your Escort.',
-        ],
-      },
-    },
-    {
       kind: 'checkbox',
       name: 'acknowledgmentAgreement',
-      label: 'I have reviewed and agree to follow all rules and guidelines',
+      label: 'I have read and agree to follow all rules and guidelines',
       required: true,
     },
   ],
 };
 
-// ============================================
-// STEP 5: SECURITY CLEARANCE
-// ============================================
 // ============================================
 // STEP 5: SECURITY CLEARANCE
 // ============================================
@@ -305,7 +213,7 @@ export const securityConfig: SectionConfig = {
       name: 'governmentIdNumber',
       label: 'Government ID Number (DL or Passport)',
       required: true,
-      placeholder: 'D1234567 or 123456789',
+      placeholder: 'D1234567',
     },
     {
       kind: 'text',
@@ -325,7 +233,7 @@ export const securityConfig: SectionConfig = {
     {
       kind: 'date',
       name: 'idExpiration',
-      label: 'ID expiration (MM-DD-YYYY)',
+      label: 'ID expiration',
       required: true,
       placeholder: 'MM-DD-YYYY',
     },
@@ -345,9 +253,16 @@ export const securityConfig: SectionConfig = {
       required: true,
       options: [
         { label: 'Directly through this form', value: 'direct' },
-        { label: 'Call the Executive Director (phone method)', value: 'call' },
+        { label: 'Call the Executive Director at (415) 275-2058', value: 'call' },
         { label: 'Split: first five here, last four via text/email/call', value: 'split' },
       ],
+    },
+    {
+      kind: 'checkbox',
+      name: 'ssnVerifiedByPhone',
+      label: 'I confirmed my SSN over the phone with the Executive Director at (415) 275-2058',
+      required: true,
+      showIf: (values: Record<string, unknown>) => values.ssnMethod === 'call',
     },
     {
       kind: 'text',
@@ -356,7 +271,7 @@ export const securityConfig: SectionConfig = {
       placeholder: '123-45-6789',
       required: true,
       showIf: (v) => v.ssnMethod === 'direct',
-      helpText: 'Format: 123-45-6789 or 123456789',
+      helpText: 'Format: 123-45-6789',
     },
     {
       kind: 'text',

@@ -127,6 +127,34 @@ export default function StepPage() {
 
   const handleStepComplete = async (payload: FormValues) => {
     const updatedFormData = { ...formData, ...payload };
+
+    // ✅ CLEAN UP CONDITIONAL FIELDS
+    // SSN Method conditional cleanup
+    if (updatedFormData.ssnMethod !== 'call') {
+      delete updatedFormData.ssnVerifiedByPhone;
+    }
+    if (updatedFormData.ssnMethod !== 'direct') {
+      delete updatedFormData.ssnFull;
+      delete updatedFormData.ssnFullConfirm;
+    }
+    if (updatedFormData.ssnMethod !== 'split') {
+      delete updatedFormData.ssnFirstFive;
+      delete updatedFormData.ssnFirstFiveConfirm;
+    }
+
+    // Government ID Type conditional cleanup
+    if (updatedFormData.governmentIdType !== 'driver_license') {
+      delete updatedFormData.idState;
+    }
+    if (updatedFormData.governmentIdType !== 'passport') {
+      delete updatedFormData.passportScan;
+    }
+
+    // Former Inmate conditional cleanup
+    if (updatedFormData.formerInmate !== 'yes') {
+      delete updatedFormData.wardenLetter;
+    }
+
     setFormData(updatedFormData);
 
     try {

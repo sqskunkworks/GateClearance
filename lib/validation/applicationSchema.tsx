@@ -160,48 +160,10 @@ export const experienceSchema = z.object({
 });
 
 // ============================================
-// STEP 4: RULES & ACKNOWLEDGMENT
+// STEP 4: RULES & ACKNOWLEDGMENT (SIMPLIFIED)
 // ============================================
 export const rulesSchema = z.object({
-  rulesColor: z
-    .enum(['Blue', 'Green', 'Yellow', 'Orange', 'Gray', 'Black'])
-    .refine((val) => val === 'Black', 'Only black clothing is allowed'),
-  
-  rulesPhonePolicy: z
-    .enum([
-      'Bring inside',
-      'Leave in car / check at East Gate',
-      'Clear bag inside',
-    ])
-    .refine(
-      (val) => val === 'Leave in car / check at East Gate',
-      'You must leave devices in your car or check them at East Gate'
-    ),
-  
-  rulesShareContact: z
-    .enum([
-      'Direct to public handles',
-      'Politely decline + ask Kai/Escort',
-      'Accept + keep confidential',
-    ])
-    .refine(
-      (val) => val === 'Politely decline + ask Kai/Escort',
-      'Contact exchange requires approval from Kai and your escort'
-    ),
-  
-  rulesWrittenMaterials: z
-    .enum([
-      'Personal business cards',
-      'Contact information cards',
-      'Materials related to SkunkWorks with approval',
-      'Personal notes',
-    ])
-    .refine(
-      (val) => val === 'Materials related to SkunkWorks with approval',
-      'Only SkunkWorks-related materials with approval are permitted'
-    ),
-  
-    acknowledgmentAgreement: z.literal(true),
+  acknowledgmentAgreement: z.literal(true),
 });
 
 // ============================================
@@ -211,24 +173,10 @@ export const securitySchema = z
   .object({
     governmentIdType: z.enum(['driver_license', 'passport']),
     
-    // ========== FIELD-LEVEL VALIDATION: Triggers on blur ==========
     governmentIdNumber: z
       .string()
       .min(1, 'Please enter your government ID number')
-      .max(50, 'ID number is too long (maximum 50 characters)')
-      .refine(
-        (val) => {
-          if (!val) return true; // Let .min() handle empty validation
-          const cleaned = val.replace(/[\s-]/g, '');
-          // Accept either Driver's License OR Passport format at field level
-          // Driver's License: 1-2 letters + 6-15 digits, or 8-15 digits only
-          const isDL = /^([A-Z]{1,2}\d{6,15}|\d{8,15})$/i.test(cleaned);
-          // Passport: 6-9 alphanumeric
-          const isPassport = /^[A-Z0-9]{6,9}$/i.test(cleaned);
-          return isDL || isPassport;
-        },
-        'Please enter a valid ID number (letters and numbers only, 6-15 characters)'
-      ),
+      .max(50, 'ID number is too long (maximum 50 characters)'),
     
     governmentIdNumberConfirm: z
       .string()
@@ -265,6 +213,16 @@ export const securitySchema = z
     ssnFirstFive: z.string().optional(),
     ssnFirstFiveConfirm: z.string().optional(),
     
+    ssnVerifiedByPhone: z
+    .union([z.boolean(), z.string()])
+    .optional()
+    .transform((val) => {
+      if (val === 'true') return true;
+      if (val === 'false') return false;
+      if (typeof val === 'boolean') return val;
+      return undefined;
+    }),
+    
     formerInmate: z.enum(['yes', 'no']),
     
     wardenLetter: z.instanceof(File).optional(),
@@ -272,21 +230,17 @@ export const securitySchema = z
     onParole: z.enum(['yes', 'no']),
     
     confirmAccuracy: z.literal(true),
-
-
     
     digitalSignature: z
       .string()
       .min(1, 'Please provide your digital signature'),
     
-      consentToDataUse: z.literal(true),
+    consentToDataUse: z.literal(true),
   })
-  // ========== SCHEMA-LEVEL VALIDATIONS: Run on submit ==========
   .refine(
     (data) => {
       if (data.governmentIdType === 'driver_license') {
-        const cleaned = data.governmentIdNumber.replace(/[\s-]/g, '');
-        // Driver's License: 1-2 letters followed by 6-15 digits, or 8-15 digits only
+        const cleaned = data.governmentIdNumber.replace(/[^A-Z0-9]/gi, '').toUpperCase();
         return /^([A-Z]{1,2}\d{6,15}|\d{8,15})$/i.test(cleaned);
       }
       return true;
@@ -299,8 +253,7 @@ export const securitySchema = z
   .refine(
     (data) => {
       if (data.governmentIdType === 'passport') {
-        const cleaned = data.governmentIdNumber.replace(/[\s-]/g, '');
-        // Passport: 6-9 alphanumeric characters
+        const cleaned = data.governmentIdNumber.replace(/[^A-Z0-9]/gi, '').toUpperCase();
         return /^[A-Z0-9]{6,9}$/i.test(cleaned);
       }
       return true;
@@ -336,8 +289,8 @@ export const securitySchema = z
   )
   .refine(
     (data) => {
-      const normalized1 = data.governmentIdNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
-      const normalized2 = data.governmentIdNumberConfirm.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const normalized1 = data.governmentIdNumber.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+      const normalized2 = data.governmentIdNumberConfirm.replace(/[^A-Z0-9]/gi, '').toUpperCase();
       return normalized1 === normalized2;
     },
     {
@@ -399,6 +352,18 @@ export const securitySchema = z
   )
   .refine(
     (data) => {
+      if (data.ssnMethod === 'call') {
+        return data.ssnVerifiedByPhone === true;
+      }
+      return true;
+    },
+    {
+      message: 'Please confirm you have provided your SSN via phone call',
+      path: ['ssnVerifiedByPhone'],
+    }
+  )
+  .refine(
+    (data) => {
       if (data.formerInmate === 'yes') {
         return data.wardenLetter instanceof File;
       }
@@ -424,7 +389,7 @@ export const securitySchema = z
   .refine(
     (data) => {
       if (data.passportScan instanceof File) {
-        return data.passportScan.size <= 5 * 1024 * 1024; // 5MB
+        return data.passportScan.size <= 5 * 1024 * 1024;
       }
       return true;
     },
