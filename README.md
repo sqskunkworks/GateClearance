@@ -21,6 +21,6 @@ It handles draft persistence, sensitive data submission, and PDF generation for 
 - Environment variables managed in Vercel dashboard
 
 ## Security Notes
-- Sensitive fields (SSN, ID number, signature) are NOT stored during drafts
+- Sensitive fields (SSN, ID number, signature) are NOT stored in the web app
 - Drafts use placeholders to satisfy NOT NULL constraints
 - Final submission writes sensitive data and generates PDFs
