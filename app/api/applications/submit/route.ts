@@ -202,7 +202,10 @@ export async function POST(req: Request) {
         throw new Error('PDF generation returned empty buffer');
       }
       
-      const filename = `CDCR_2311_${formDataObj.firstName}_${formDataObj.lastName}_${applicationId}.pdf`;
+      const firstName = getString('firstName').replace(/[^a-zA-Z]/g, '');
+       const lastName = getString('lastName').replace(/[^a-zA-Z]/g, '');
+      const filename = `${firstName}_${lastName}_2311.pdf`;
+  ;
       const pdfBuffer = Buffer.from(pdfBytes);
       
       await uploadPDFToDrive(pdfBuffer, filename);
@@ -217,7 +220,6 @@ export async function POST(req: Request) {
       });
 
     } catch (pdfError) {
-      console.error('PDF generation failed:', pdfError);
       throw new Error(`Failed to generate PDF: ${pdfError instanceof Error ? pdfError.message : 'Unknown error'}`);
     }
 
@@ -260,7 +262,6 @@ export async function POST(req: Request) {
         });
         
       } catch (passportError) {
-        console.error('Passport upload failed:', passportError);
         return NextResponse.json(
           { error: 'Failed to upload passport scan', details: passportError instanceof Error ? passportError.message : 'Unknown error' },
           { status: 500 }

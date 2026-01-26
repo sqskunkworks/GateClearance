@@ -3,6 +3,9 @@ import { Readable } from 'stream';
 
 const SCOPES = ['https://www.googleapis.com/auth/drive.file'];
 
+// Boss email who should see the files
+const BOSS_EMAIL = 'boss@sqskunkworks.com'; // ← UPDATE THIS!
+
 function getDriveClient() {
   if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL) {
     throw new Error('GOOGLE_SERVICE_ACCOUNT_EMAIL is not set');
@@ -43,6 +46,7 @@ export async function uploadPDFToDrive(
     const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID!;
     const stream = Readable.from(pdfBuffer);
 
+    // Upload file
     const response = await drive.files.create({
       requestBody: {
         name: filename,
@@ -59,6 +63,21 @@ export async function uploadPDFToDrive(
 
     const fileId = response.data.id!;
     const webViewLink = response.data.webViewLink!;
+
+    // Share with boss
+    try {
+      await drive.permissions.create({
+        fileId: fileId,
+        requestBody: {
+          type: 'user',
+          role: 'reader', // Boss can view/download but not edit
+          emailAddress: BOSS_EMAIL,
+        },
+        supportsAllDrives: true,
+      });
+    } catch (shareError) {
+      // Don't fail upload if sharing fails
+    }
 
     return { fileId, webViewLink };
   } catch (error: unknown) {

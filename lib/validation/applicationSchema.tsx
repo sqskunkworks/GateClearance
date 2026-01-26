@@ -370,7 +370,7 @@ export const securitySchema = z
       return true;
     },
     {
-      message: 'Please upload a letter from the Warden (required for former inmates)',
+      message:' Please upload a clearance request letter addressed to San Quentin',
       path: ['wardenLetter'],
     }
   )
