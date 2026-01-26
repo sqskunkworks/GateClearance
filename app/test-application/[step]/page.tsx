@@ -42,13 +42,28 @@ export default function StepPage() {
         if (!response.ok) {
           throw new Error('Failed to load');
         }
-
+  
         const { draft }: { draft: FormValues } = await response.json();
- 
+  
         const visitDate = sessionStorage.getItem(`app_${appId}_visitDate`);
         if (visitDate) {
           draft.visitDate = visitDate;
           draft.preferredVisitDate = visitDate;
+        }
+        
+        // Re-format driver's license for display if stored without dash
+        if (
+          draft.governmentIdType === 'driver_license' && 
+          draft.governmentIdNumber && 
+          typeof draft.governmentIdNumber === 'string'
+        ) {
+          const cleaned = draft.governmentIdNumber.replace(/-/g, '');
+          if (/^[A-Z]{1,2}\d/.test(cleaned)) {
+            const match = cleaned.match(/^([A-Z]{1,2})(\d+)$/);
+            if (match) {
+              draft.governmentIdNumber = `${match[1]}-${match[2]}`;
+            }
+          }
         }
         
         setFormData(draft);
@@ -154,6 +169,14 @@ export default function StepPage() {
     if (updatedFormData.formerInmate !== 'yes') {
       delete updatedFormData.wardenLetter;
     }
+    
+    if (updatedFormData.governmentIdNumber && typeof updatedFormData.governmentIdNumber === 'string') {
+      updatedFormData.governmentIdNumber = updatedFormData.governmentIdNumber.replace(/-/g, '');
+    }
+    if (updatedFormData.governmentIdNumberConfirm && typeof updatedFormData.governmentIdNumberConfirm === 'string') {
+      updatedFormData.governmentIdNumberConfirm = updatedFormData.governmentIdNumberConfirm.replace(/-/g, '');
+    }
+
 
     setFormData(updatedFormData);
 

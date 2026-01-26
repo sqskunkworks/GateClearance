@@ -310,12 +310,12 @@ export const securityConfig: SectionConfig = {
     },
     {
       name: 'wardenLetter',
-      label: 'Upload Letter from Warden',
+      label: 'Upload clearance request letter to San Quentin',
       kind: 'file', 
       required: true,
       accept: '.pdf,.jpg,.jpeg,.png',
-      helpText: 'Please upload a letter from the Warden approving your visit (PDF, JPG, or PNG, max 5MB)',
-      showIf: (values: Record<string, unknown>) => values.formerInmate === 'yes',
+      helpText: 'Upload a formal letter requesting visitor clearance addressed to San Quentin (PDF, JPG, or PNG, max 5MB)',
+      showIf: (values: Record<string, unknown>) => values.formerInmate === 'yes', 
     },
     {
       kind: 'radio',
