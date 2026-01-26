@@ -75,9 +75,7 @@ export async function uploadPDFToDrive(
         },
         supportsAllDrives: true,
       });
-      console.log(`✓ File shared with ${BOSS_EMAIL}`);
     } catch (shareError) {
-      console.warn('Failed to share file with boss:', shareError);
       // Don't fail upload if sharing fails
     }
 
