@@ -41,6 +41,13 @@ export const ssnMethodEnum = pgEnum("ssn_method", [
   "split",
 ]);
 
+// ✅ NEW: Application type enum
+export const applicationTypeEnum = pgEnum("application_type", [
+  "short_gc",
+  "annual_gc",
+  "brown_card",
+]);
+
 /* ========= Tables ========= */
 export const applications = pgTable("applications", {
   // PK
@@ -49,6 +56,9 @@ export const applications = pgTable("applications", {
   // Auth / linkage
   userId: text("user_id").notNull(),
   email: text("email").notNull(),
+
+  // ✅ NEW: Application type
+  applicationType: applicationTypeEnum("application_type").notNull().default("short_gc"),
 
   // STEP 1: Personal Information
   firstName: text("first_name").notNull(),
@@ -72,7 +82,7 @@ export const applications = pgTable("applications", {
   reformFuture: text("reform_future").notNull(),
   additionalNotes: text("additional_notes"),
 
-  // STEP 4: Rules & Acknowledgment (SIMPLIFIED - removed quiz fields)
+  // STEP 4: Rules & Acknowledgment
   acknowledgmentAgreement: boolean("acknowledgment_agreement").notNull(),
 
   // STEP 5: Security Clearance - Government ID
@@ -89,7 +99,7 @@ export const applications = pgTable("applications", {
   ssnFullConfirm: text("ssn_full_confirm"), // Encrypted
   ssnFirstFive: text("ssn_first_five"), // Encrypted
   ssnFirstFiveConfirm: text("ssn_first_five_confirm"), // Encrypted
-  ssnVerifiedByPhone: boolean("ssn_verified_by_phone"), // NEW FIELD
+  ssnVerifiedByPhone: boolean("ssn_verified_by_phone"),
 
   // STEP 5: Security Clearance - Background
   formerInmate: text("former_inmate").notNull(), // "yes" or "no"
