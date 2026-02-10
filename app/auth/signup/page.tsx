@@ -20,32 +20,37 @@ export default function SignupPage() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-
-    try {
   
-
-      const { error } = await supabase.auth.signUp({
+    try {
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
             full_name: fullName,
           },
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       });
-
-
-
+  
       if (error) {
+        // Check for specific error types
+        if (error.message.includes('already registered') || error.message.includes('already exists')) {
+          setError('This email is already registered. Please sign in instead.');
+          return;
+        }
         throw error;
       }
-
-
-
-      // Show email confirmation message
-      alert('✅ Account created! Please check your email to confirm your account before signing in.');
-
-      router.push('/auth/login');
+  
+      // Check if email confirmation is disabled (user already verified)
+      if (data?.user && data.user.identities && data.user.identities.length === 0) {
+        // Email already registered and confirmed
+        setError('This email is already registered. Please sign in instead.');
+        return;
+      }
+  
+      // Redirect to check-email page
+      router.push(`/auth/check-email?email=${encodeURIComponent(email)}`);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to create account';
       setError(message);

@@ -5,6 +5,15 @@ const phoneRegex = /^\+?[1-9]\d{9,14}$/;
 const ssnRegex = /^\d{3}-?\d{2}-?\d{4}$/;
 const dateRegex = /^\d{2}-\d{2}-\d{4}$/;
 
+// Application type enum
+export const APPLICATION_TYPES = {
+  SHORT_GC: 'short_gc',
+  ANNUAL_GC: 'annual_gc',
+  BROWN_CARD: 'brown_card',
+} as const;
+
+export const applicationTypeSchema = z.enum(['short_gc', 'annual_gc', 'brown_card']);
+
 const isValidDate = (dateStr: string) => {
   if (!dateRegex.test(dateStr)) return false;
   const [mm, dd, yyyy] = dateStr.split('-').map(Number);
@@ -24,7 +33,6 @@ const isFutureDate = (dateStr: string) => {
   today.setHours(0, 0, 0, 0);
   return date >= today;
 };
-
 
 const isExpiringWithin30Days = (dateStr: string) => {
   if (!isValidDate(dateStr)) return false;
@@ -161,47 +169,9 @@ export const experienceSchema = z.object({
 });
 
 // ============================================
-// STEP 4: RULES & ACKNOWLEDGMENT
+// STEP 4: RULES & ACKNOWLEDGMENT (SIMPLIFIED)
 // ============================================
 export const rulesSchema = z.object({
-  rulesColor: z
-    .enum(['Blue', 'Green', 'Yellow', 'Orange', 'Gray', 'Black'])
-    .refine((val) => val === 'Black', 'Only black clothing is allowed'),
-  
-  rulesPhonePolicy: z
-    .enum([
-      'Bring inside',
-      'Leave in car / check at East Gate',
-      'Clear bag inside',
-    ])
-    .refine(
-      (val) => val === 'Leave in car / check at East Gate',
-      'You must leave devices in your car or check them at East Gate'
-    ),
-  
-  rulesShareContact: z
-    .enum([
-      'Direct to public handles',
-      'Politely decline + ask Kai/Escort',
-      'Accept + keep confidential',
-    ])
-    .refine(
-      (val) => val === 'Politely decline + ask Kai/Escort',
-      'Contact exchange requires approval from Kai and your escort'
-    ),
-  
-  rulesWrittenMaterials: z
-    .enum([
-      'Personal business cards',
-      'Contact information cards',
-      'Materials related to SkunkWorks with approval',
-      'Personal notes',
-    ])
-    .refine(
-      (val) => val === 'Materials related to SkunkWorks with approval',
-      'Only SkunkWorks-related materials with approval are permitted'
-    ),
-  
   acknowledgmentAgreement: z.literal(true),
 });
 
@@ -236,8 +206,13 @@ export const securitySchema = z
       .refine(
         isFutureDate,
         'Your ID has expired. Please renew it before submitting this application'
+      )
+      .refine(
+        (val) => !isExpiringWithin30Days(val),
+        'Your ID must be valid for at least 30 days. Please renew your ID before applying.'
       ),
-      passportScan: z.instanceof(File).optional(),
+      
+    passportScan: z.instanceof(File).optional(),
     
     ssnMethod: z.enum(['direct', 'call', 'split']),
     
@@ -246,6 +221,16 @@ export const securitySchema = z
     
     ssnFirstFive: z.string().optional(),
     ssnFirstFiveConfirm: z.string().optional(),
+    
+    ssnVerifiedByPhone: z
+    .union([z.boolean(), z.string()])
+    .optional()
+    .transform((val) => {
+      if (val === 'true') return true;
+      if (val === 'false') return false;
+      if (typeof val === 'boolean') return val;
+      return undefined;
+    }),
     
     formerInmate: z.enum(['yes', 'no']),
     
@@ -261,6 +246,32 @@ export const securitySchema = z
     
     consentToDataUse: z.literal(true),
   })
+  .refine(
+    (data) => {
+      if (data.governmentIdType === 'driver_license') {
+        const cleaned = data.governmentIdNumber.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+        return /^([A-Z]{1,2}\d{6,15}|\d{8,15})$/i.test(cleaned);
+      }
+      return true;
+    },
+    {
+      message: "Driver's License must be in valid format (e.g., D1234567, 12345678) - only letters, numbers, spaces and dashes allowed",
+      path: ['governmentIdNumber'],
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.governmentIdType === 'passport') {
+        const cleaned = data.governmentIdNumber.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+        return /^[A-Z0-9]{6,9}$/i.test(cleaned);
+      }
+      return true;
+    },
+    {
+      message: 'Passport number must be 6-9 characters (only letters and numbers allowed, e.g., 123456789 or N12345678)',
+      path: ['governmentIdNumber'],
+    }
+  )
   .refine(
     (data) => {
       if (data.governmentIdType === 'driver_license') {
@@ -287,8 +298,8 @@ export const securitySchema = z
   )
   .refine(
     (data) => {
-      const normalized1 = data.governmentIdNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
-      const normalized2 = data.governmentIdNumberConfirm.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const normalized1 = data.governmentIdNumber.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+      const normalized2 = data.governmentIdNumberConfirm.replace(/[^A-Z0-9]/gi, '').toUpperCase();
       return normalized1 === normalized2;
     },
     {
@@ -350,63 +361,65 @@ export const securitySchema = z
   )
   .refine(
     (data) => {
+      if (data.ssnMethod === 'call') {
+        return data.ssnVerifiedByPhone === true;
+      }
+      return true;
+    },
+    {
+      message: 'Please confirm you have provided your SSN via phone call',
+      path: ['ssnVerifiedByPhone'],
+    }
+  )
+  .refine(
+    (data) => {
       if (data.formerInmate === 'yes') {
         return data.wardenLetter instanceof File;
       }
       return true;
     },
     {
-      message: 'Please upload a letter from the Warden (required for former inmates)',
+      message:' Please upload a clearance request letter addressed to San Quentin',
       path: ['wardenLetter'],
     }
-  )// After the wardenLetter refinement, add these 4 new refinements:
-
-.refine(
-  (data) => {
-    return !isExpiringWithin30Days(data.idExpiration);
-  },
-  {
-    message: 'Your ID must be valid for at least 30 days. Please renew your ID before applying.',
-    path: ['idExpiration'],
-  }
-)
-.refine(
-  (data) => {
-    if (data.governmentIdType === 'passport') {
-      return data.passportScan instanceof File;
+  )
+  .refine(
+    (data) => {
+      if (data.governmentIdType === 'passport') {
+        return data.passportScan instanceof File;
+      }
+      return true;
+    },
+    {
+      message: 'Please upload a scan of your passport (required for passport holders)',
+      path: ['passportScan'],
     }
-    return true;
-  },
-  {
-    message: 'Please upload a scan of your passport (required for passport holders)',
-    path: ['passportScan'],
-  }
-)
-.refine(
-  (data) => {
-    if (data.passportScan instanceof File) {
-      return data.passportScan.size <= 5 * 1024 * 1024; // 5MB
+  )
+  .refine(
+    (data) => {
+      if (data.passportScan instanceof File) {
+        return data.passportScan.size <= 5 * 1024 * 1024;
+      }
+      return true;
+    },
+    {
+      message: 'Passport scan must be less than 5MB',
+      path: ['passportScan'],
     }
-    return true;
-  },
-  {
-    message: 'Passport scan must be less than 5MB',
-    path: ['passportScan'],
-  }
-)
-.refine(
-  (data) => {
-    if (data.passportScan instanceof File) {
-      const validTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
-      return validTypes.includes(data.passportScan.type);
+  )
+  .refine(
+    (data) => {
+      if (data.passportScan instanceof File) {
+        const validTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+        return validTypes.includes(data.passportScan.type);
+      }
+      return true;
+    },
+    {
+      message: 'Passport scan must be a PDF, JPG, or PNG file',
+      path: ['passportScan'],
     }
-    return true;
-  },
-  {
-    message: 'Passport scan must be a PDF, JPG, or PNG file',
-    path: ['passportScan'],
-  }
-);
+  );
 
 // ============================================
 // FULL APPLICATION SCHEMA
