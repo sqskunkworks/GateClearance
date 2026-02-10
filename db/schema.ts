@@ -1,4 +1,3 @@
-// db/schema.ts
 import {
   pgTable,
   uuid,
@@ -28,20 +27,13 @@ export const appStatusEnum = pgEnum("application_status", [
   "rejected",
 ]);
 
-// Government ID type
 export const governmentIdTypeEnum = pgEnum("government_id_type", [
+  "state_id",
   "driver_license",
   "passport",
+  "other",
 ]);
 
-// SSN method
-export const ssnMethodEnum = pgEnum("ssn_method", [
-  "direct",
-  "call",
-  "split",
-]);
-
-// ✅ NEW: Application type enum
 export const applicationTypeEnum = pgEnum("application_type", [
   "short_gc",
   "annual_gc",
@@ -50,92 +42,81 @@ export const applicationTypeEnum = pgEnum("application_type", [
 
 /* ========= Tables ========= */
 export const applications = pgTable("applications", {
-  // PK
+  // Primary Key
   id: uuid("id").defaultRandom().primaryKey(),
 
-  // Auth / linkage
+  // Auth / User
   userId: text("user_id").notNull(),
+
+  // Contact
   email: text("email").notNull(),
 
-  // ✅ NEW: Application type
+  // Application Type
   applicationType: applicationTypeEnum("application_type").notNull().default("short_gc"),
 
-  // STEP 1: Personal Information
+  // Personal Information
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
-  otherNames: text("other_names"),
-  dateOfBirth: text("date_of_birth").notNull(), // Stored as MM-DD-YYYY text
+  otherNames: text("other_names"), // nullable
+  dateOfBirth: date("date_of_birth").notNull(), // date type, not text
   gender: genderEnum("gender").notNull(),
 
-  // STEP 2: Contact & Organization
+  // Contact & Organization
   phoneNumber: text("phone_number").notNull(),
-  visitDate: text("visit_date"), // Optional, stored as MM-DD-YYYY text
   companyOrOrganization: text("company_or_organization").notNull(),
-  purposeOfVisit: text("purpose_of_visit").notNull(),
+  purposeOfVisit: text("purpose_of_visit"), // nullable
 
-  // STEP 3: Experience & Expectations
-  engagedDirectly: text("engaged_directly").notNull(),
-  perceptions: text("perceptions").notNull(),
-  expectations: text("expectations").notNull(),
-  justiceReformBefore: text("justice_reform_before").notNull(),
-  interestsMost: text("interests_most").notNull(),
-  reformFuture: text("reform_future").notNull(),
-  additionalNotes: text("additional_notes"),
+  // Authorization
+  authorizationType: text("authorization_type").notNull(),
 
-  // STEP 4: Rules & Acknowledgment
-  acknowledgmentAgreement: boolean("acknowledgment_agreement").notNull(),
-
-  // STEP 5: Security Clearance - Government ID
+  // Government ID
   governmentIdType: governmentIdTypeEnum("government_id_type").notNull(),
   governmentIdNumber: text("government_id_number").notNull(),
-  governmentIdNumberConfirm: text("government_id_number_confirm").notNull(),
-  idState: text("id_state"),
-  idExpiration: text("id_expiration").notNull(), // Stored as MM-DD-YYYY text
-  passportScanUrl: text("passport_scan_url"), // Google Drive URL
+  idState: text("id_state"), // nullable
+  idExpiration: date("id_expiration"), // nullable, date type
 
-  // STEP 5: Security Clearance - SSN
-  ssnMethod: ssnMethodEnum("ssn_method").notNull(),
-  ssnFull: text("ssn_full"), // Encrypted
-  ssnFullConfirm: text("ssn_full_confirm"), // Encrypted
-  ssnFirstFive: text("ssn_first_five"), // Encrypted
-  ssnFirstFiveConfirm: text("ssn_first_five_confirm"), // Encrypted
-  ssnVerifiedByPhone: boolean("ssn_verified_by_phone"),
+  // Background Questions (all have defaults)
+  visitedInmate: boolean("visited_inmate").notNull().default(false),
+  formerInmate: boolean("former_inmate").notNull().default(false),
+  restrictedAccess: boolean("restricted_access").notNull().default(false),
+  felonyConviction: boolean("felony_conviction").notNull().default(false),
+  onProbationParole: boolean("on_probation_parole").notNull().default(false),
+  pendingCharges: boolean("pending_charges").notNull().default(false),
 
-  // STEP 5: Security Clearance - Background
-  formerInmate: text("former_inmate").notNull(), // "yes" or "no"
-  wardenLetterUrl: text("warden_letter_url"), // Google Drive URL
-  onParole: text("on_parole").notNull(), // "yes" or "no"
+  // Digital Signature
+  digitalSignature: text("digital_signature"), // nullable
 
-  // STEP 5: Security Clearance - Final
-  confirmAccuracy: boolean("confirm_accuracy").notNull(),
-  digitalSignature: text("digital_signature").notNull(), // Base64 data URL
-  consentToDataUse: boolean("consent_to_data_use").notNull(),
-
-  // Application Status
+  // Status
   status: appStatusEnum("status").notNull().default("draft"),
-  submittedAt: timestamp("submitted_at", { withTimezone: true }),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }), // nullable
 
   // Timestamps
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+
+  // JSONB columns
+  impactResponses: jsonb("impact_responses"), // nullable
+  rulesQuizAnswers: jsonb("rules_quiz_answers"), // nullable
+
+  // SSN verification (only this field exists)
+  ssnVerifiedByPhone: boolean("ssn_verified_by_phone"), // nullable
 });
 
 export type Application = typeof applications.$inferSelect;
 export type NewApplication = typeof applications.$inferInsert;
 
-// Documents table 
+// Documents table
 export const documents = pgTable("documents", {
   id: uuid("id").defaultRandom().primaryKey(),
   applicationId: uuid("application_id")
     .notNull()
-    .references(() => applications.id, { onDelete: "cascade" }), 
+    .references(() => applications.id, { onDelete: "cascade" }),
   url: text("url").notNull(),
   filename: text("filename").notNull(),
-  mimeType: text("mime_type"),
-  sizeBytes: integer("size_bytes"),
-
+  mimeType: text("mime_type"), // nullable
+  sizeBytes: integer("size_bytes"), // nullable
   uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
-  uploadedByUserId: text("uploaded_by_user_id"),
+  uploadedByUserId: text("uploaded_by_user_id"), // nullable
 });
 
 export type Document = typeof documents.$inferSelect;

@@ -5,6 +5,15 @@ const phoneRegex = /^\+?[1-9]\d{9,14}$/;
 const ssnRegex = /^\d{3}-?\d{2}-?\d{4}$/;
 const dateRegex = /^\d{2}-\d{2}-\d{4}$/;
 
+// Application type enum
+export const APPLICATION_TYPES = {
+  SHORT_GC: 'short_gc',
+  ANNUAL_GC: 'annual_gc',
+  BROWN_CARD: 'brown_card',
+} as const;
+
+export const applicationTypeSchema = z.enum(['short_gc', 'annual_gc', 'brown_card']);
+
 const isValidDate = (dateStr: string) => {
   if (!dateRegex.test(dateStr)) return false;
   const [mm, dd, yyyy] = dateStr.split('-').map(Number);

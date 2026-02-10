@@ -87,7 +87,9 @@ export default function StepPage() {
       if (currentStep === 1) {
         const newId = crypto.randomUUID();
         setApplicationId(newId);
-        setFormData({});
+        setFormData({
+          applicationType: 'short_gc', 
+        });
         setLoading(false);
         return;
       }
@@ -203,6 +205,7 @@ export default function StepPage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               applicationId,
+              applicationType: 'short_gc',
               ...updatedFormData,
             }),
           });
@@ -298,7 +301,7 @@ export default function StepPage() {
         // Use FormData for final submit (includes files)
         const formData = new FormData();
         formData.append('applicationId', applicationId);
-        
+        formData.append('applicationType', 'short_gc');
         Object.keys(updatedFormData).forEach((key) => {
           const value = updatedFormData[key];
           

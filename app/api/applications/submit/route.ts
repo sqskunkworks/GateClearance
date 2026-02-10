@@ -42,17 +42,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Application ID is required' }, { status: 400 });
     }
 
+    // ✅ FIXED: Get application data to extract application_type
     const supabase = getServiceSupabase();
-    const { error: loadError } = await supabase
+    const { data: application, error: loadError } = await supabase
       .from('applications')
       .select('*')
       .eq('id', applicationId)
       .eq('user_id', user.id)
       .single();
 
-    if (loadError) {
+    if (loadError || !application) {
+      console.error('Application load error:', loadError);
       return NextResponse.json({ error: 'Draft not found' }, { status: 404 });
     }
+
+    // ✅ Extract applicationType from database
+    const applicationType = application.application_type || 'short_gc';
 
     type FormValue = string | boolean | File;
     const formDataObj: Record<string, FormValue> = {};
@@ -95,8 +100,10 @@ export async function POST(req: Request) {
       }
     }
 
+    // ✅ FIXED: Include applicationType in validation
     const dataForValidation = {
       applicationId,
+      applicationType,
       ...formDataObj,
     };
 

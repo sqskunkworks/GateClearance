@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseClient, type SupabaseClient } from '@supabase/supabase-js';
 import { DRAFT_PLACEHOLDERS } from '@/lib/constants';
+import { applicationTypeSchema } from '@/lib/validation/applicationSchema'; // ✅ ADD THIS
 
 export const runtime = 'nodejs';
 
@@ -32,7 +33,24 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { applicationId, ...formData } = body;
+    const { applicationId, applicationType = 'short_gc', ...formData } = body; // ✅ EXTRACT applicationType
+
+    if (!applicationId) {
+      return NextResponse.json({ error: 'Application ID is required' }, { status: 400 });
+    }
+
+    // ✅ VALIDATE applicationType
+    const typeValidation = applicationTypeSchema.safeParse(applicationType);
+    if (!typeValidation.success) {
+      return NextResponse.json(
+        { 
+          error: 'Invalid application type',
+          details: 'Must be one of: short_gc, annual_gc, brown_card',
+          received: applicationType
+        },
+        { status: 400 }
+      );
+    }
 
     const requiredFields = ['firstName', 'lastName', 'dateOfBirth', 'gender'];
     const missing = requiredFields.filter(f => !formData[f]);
@@ -47,6 +65,7 @@ export async function POST(req: Request) {
     const draftData = {
       id: applicationId,
       user_id: user.id,
+      application_type: typeValidation.data, // ✅ WRITE applicationType
       
       // Step 1: Personal info (real data)
       first_name: formData.firstName,
@@ -84,7 +103,6 @@ export async function POST(req: Request) {
       .single();
 
     if (error) {
-
       return NextResponse.json(
         { error: `Failed to create draft: ${error.message}` },
         { status: 500 }
@@ -94,11 +112,11 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       applicationId: data.id,
+      applicationType: data.application_type, // ✅ RETURN applicationType
       message: 'Draft created successfully',
     });
 
   } catch (error) {
-
     return NextResponse.json(
       { error: 'Failed to create draft', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
