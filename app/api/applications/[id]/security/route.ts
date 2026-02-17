@@ -1,7 +1,7 @@
 /**
  * Security endpoint for Step 5
  * 
- * This endpoint stores only non-sensitive security metadata (ID type, state, expiration)
+ * This endpoint stores only non-sensitive security metadata (ID type, state, expiration, citizenship)
  * during draft saves. Sensitive fields (ID number, signature, background checks) are only
  * written during final submission via POST /api/applications/submit.
  */
@@ -44,15 +44,14 @@ export async function PATCH(
     const { id } = await params;
     const body = await req.json();
 
-    const updateData: {
-      government_id_type: string;
-      id_state: string | null;
-      id_expiration: string | null;
-      updated_at: string;
-    } = {
-      government_id_type: body.governmentIdType,
+    const updateData: Record<string, string | boolean | null> = {
+      government_id_type: body.governmentIdType || null,
       id_state: body.idState || null,
       id_expiration: convertToDBDate(body.idExpiration),
+      
+      // ✅ NEW: Save citizenship status
+      is_us_citizen: body.isUsCitizen === 'true' || body.isUsCitizen === true,
+      
       updated_at: new Date().toISOString(),
     };
 

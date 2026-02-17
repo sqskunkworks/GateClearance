@@ -171,6 +171,11 @@ export const rulesSchema = z.object({
 // ============================================
 export const securitySchema = z
   .object({
+    // ✅ NEW: Citizenship field
+    isUsCitizen: z.enum(['true', 'false'], {
+      message : 'Please indicate your citizenship status',
+    }),
+    
     governmentIdType: z.enum(['driver_license', 'passport']),
     
     governmentIdNumber: z
@@ -214,14 +219,14 @@ export const securitySchema = z
     ssnFirstFiveConfirm: z.string().optional(),
     
     ssnVerifiedByPhone: z
-    .union([z.boolean(), z.string()])
-    .optional()
-    .transform((val) => {
-      if (val === 'true') return true;
-      if (val === 'false') return false;
-      if (typeof val === 'boolean') return val;
-      return undefined;
-    }),
+      .union([z.boolean(), z.string()])
+      .optional()
+      .transform((val) => {
+        if (val === 'true') return true;
+        if (val === 'false') return false;
+        if (typeof val === 'boolean') return val;
+        return undefined;
+      }),
     
     formerInmate: z.enum(['yes', 'no']),
     
@@ -370,19 +375,23 @@ export const securitySchema = z
       return true;
     },
     {
-      message:' Please upload a clearance request letter addressed to San Quentin',
+      message: 'Please upload a clearance request letter addressed to San Quentin',
       path: ['wardenLetter'],
     }
   )
+  // ✅ UPDATED: Passport required if non-citizen OR using passport as ID
   .refine(
     (data) => {
-      if (data.governmentIdType === 'passport') {
+      const isNonCitizen = data.isUsCitizen === 'false';
+      const isPassportId = data.governmentIdType === 'passport';
+      
+      if (isNonCitizen || isPassportId) {
         return data.passportScan instanceof File;
       }
       return true;
     },
     {
-      message: 'Please upload a scan of your passport (required for passport holders)',
+      message: 'Passport scan is required for non-US citizens or when using passport as ID',
       path: ['passportScan'],
     }
   )

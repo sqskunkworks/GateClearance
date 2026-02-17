@@ -42,15 +42,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Application ID is required' }, { status: 400 });
     }
 
+    // ✅ FIXED: Get application data to extract citizenship and other fields
     const supabase = getServiceSupabase();
-    const { error: loadError } = await supabase
+    const { data: application, error: loadError } = await supabase
       .from('applications')
       .select('*')
       .eq('id', applicationId)
       .eq('user_id', user.id)
       .single();
 
-    if (loadError) {
+    if (loadError || !application) {
+      console.error('Application load error:', loadError);
       return NextResponse.json({ error: 'Draft not found' }, { status: 404 });
     }
 
@@ -147,6 +149,9 @@ export async function POST(req: Request) {
       id_state: getString('idState') || null,
       id_expiration: convertToDBDate(getString('idExpiration')),
       digital_signature: getString('digitalSignature'),
+      
+      // ✅ NEW: Save citizenship status
+      is_us_citizen: getString('isUsCitizen') === 'true',
       
       former_inmate: getString('formerInmate') === 'yes',
       on_probation_parole: getString('onParole') === 'yes',
@@ -264,6 +269,7 @@ export async function POST(req: Request) {
         ssnMethod: getString('ssnMethod'),
         formerInmate: getString('formerInmate'),
         onParole: getString('onParole'),
+        isUsCitizen: getString('isUsCitizen'), // ✅ NEW: Include citizenship in summary
         passportScan: formData.get('passportScan') as File | undefined,
         wardenLetter: formData.get('wardenLetter') as File | undefined,
         
@@ -304,10 +310,17 @@ export async function POST(req: Request) {
     // ============================================
     const passportScanFile = formData.get('passportScan');
     
-    if (getString('governmentIdType') === 'passport') {
+    // ✅ NEW LOGIC: Passport required if non-citizen OR using passport as ID
+    const isNonUsCitizen = application.is_us_citizen === false;
+    const isPassportId = getString('governmentIdType') === 'passport';
+    
+    if (isNonUsCitizen || isPassportId) {
       if (!passportScanFile || !(passportScanFile instanceof File)) {
+        const reason = isNonUsCitizen 
+          ? 'Passport scan is required for non-US citizens' 
+          : 'Passport scan is required when using passport as ID';
         return NextResponse.json(
-          { error: 'Passport scan is required when using passport as ID' },
+          { error: reason },
           { status: 400 }
         );
       }
