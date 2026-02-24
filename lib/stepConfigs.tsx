@@ -20,6 +20,7 @@ export const personalConfig: SectionConfig = {
   ctaLabel: 'Continue',
   fields: [
     { kind: 'text', name: 'firstName', label: 'First name', required: true },
+    { kind: 'text', name: 'middleName', label: 'Middle name (optional)' }, // ✅ NEW
     { kind: 'text', name: 'lastName', label: 'Last name', required: true },
     { kind: 'text', name: 'otherNames', label: 'Other names (optional)', span: 2 },
     {
@@ -198,7 +199,7 @@ export const securityConfig: SectionConfig = {
   columns: 1,
   ctaLabel: 'Submit Application',
   fields: [
-    // ✅ NEW: Citizenship question FIRST
+    // Citizenship question FIRST
     {
       kind: 'radio',
       name: 'isUsCitizen',
@@ -248,7 +249,7 @@ export const securityConfig: SectionConfig = {
       required: true,
       placeholder: 'MM-DD-YYYY',
     },
-    // ✅ UPDATED: Passport upload now shows for non-citizens OR passport ID holders
+    // Passport upload shows for non-citizens OR passport ID holders
     {
       name: 'passportScan',
       label: 'Upload Passport Scan',

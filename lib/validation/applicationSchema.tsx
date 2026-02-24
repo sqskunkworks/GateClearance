@@ -46,6 +46,11 @@ export const personalInfoSchema = z.object({
     .min(1, 'Please enter your first name')
     .max(100, 'First name is too long (maximum 100 characters)'),
   
+  middleName: z
+    .string()
+    .max(100, 'Middle name is too long (maximum 100 characters)')
+    .optional(), // ✅ NEW: Middle name field (optional)
+  
   lastName: z
     .string()
     .min(1, 'Please enter your last name')
@@ -171,9 +176,8 @@ export const rulesSchema = z.object({
 // ============================================
 export const securitySchema = z
   .object({
-    // ✅ NEW: Citizenship field
     isUsCitizen: z.enum(['true', 'false'], {
-      message : 'Please indicate your citizenship status',
+      message: 'Please indicate your citizenship status',
     }),
     
     governmentIdType: z.enum(['driver_license', 'passport']),
@@ -379,7 +383,6 @@ export const securitySchema = z
       path: ['wardenLetter'],
     }
   )
-  // ✅ UPDATED: Passport required if non-citizen OR using passport as ID
   .refine(
     (data) => {
       const isNonCitizen = data.isUsCitizen === 'false';

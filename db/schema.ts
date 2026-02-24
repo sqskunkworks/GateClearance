@@ -57,6 +57,7 @@ export const applications = pgTable("applications", {
 
   // Personal Information
   firstName: text("first_name").notNull(),
+  middleName: text("middle_name"), // Full middle name (optional)
   lastName: text("last_name").notNull(),
   otherNames: text("other_names"),
   dateOfBirth: date("date_of_birth").notNull(),
@@ -70,7 +71,7 @@ export const applications = pgTable("applications", {
   // Authorization
   authorizationType: text("authorization_type").notNull(),
 
-  // ✅ NEW: Citizenship status
+  // Citizenship status
   isUsCitizen: boolean("is_us_citizen"), // nullable
 
   // Government ID

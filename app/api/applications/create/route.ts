@@ -50,6 +50,7 @@ export async function POST(req: Request) {
       
       // Step 1: Personal info (real data)
       first_name: formData.firstName,
+      middle_name: formData.middleName || null, // ✅ NEW: Middle name
       last_name: formData.lastName,
       other_names: formData.otherNames || null,
       date_of_birth: convertToDBDate(formData.dateOfBirth),
@@ -84,7 +85,6 @@ export async function POST(req: Request) {
       .single();
 
     if (error) {
-
       return NextResponse.json(
         { error: `Failed to create draft: ${error.message}` },
         { status: 500 }
@@ -98,7 +98,6 @@ export async function POST(req: Request) {
     });
 
   } catch (error) {
-
     return NextResponse.json(
       { error: 'Failed to create draft', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }

@@ -50,7 +50,7 @@ export async function PATCH(
       id_expiration: convertToDBDate(body.idExpiration),
       
       // ✅ NEW: Save citizenship status
-      is_us_citizen: body.isUsCitizen === 'true' || body.isUsCitizen === true,
+      is_us_citizen: body.isUsCitizen === 'true' ? true : body.isUsCitizen === 'false' ? false : null,
       
       updated_at: new Date().toISOString(),
     };

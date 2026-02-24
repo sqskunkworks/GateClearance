@@ -42,7 +42,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Application ID is required' }, { status: 400 });
     }
 
-    // ✅ FIXED: Get application data to extract citizenship and other fields
     const supabase = getServiceSupabase();
     const { data: application, error: loadError } = await supabase
       .from('applications')
@@ -134,6 +133,7 @@ export async function POST(req: Request) {
 
     const updateData: Record<string, string | boolean | null | undefined> = {
       first_name: getString('firstName'),
+      middle_name: getString('middleName') || null, // ✅ NEW: Middle name
       last_name: getString('lastName'),
       other_names: getString('otherNames') || null,
       date_of_birth: convertToDBDate(getString('dateOfBirth')),
@@ -150,7 +150,6 @@ export async function POST(req: Request) {
       id_expiration: convertToDBDate(getString('idExpiration')),
       digital_signature: getString('digitalSignature'),
       
-      // ✅ NEW: Save citizenship status
       is_us_citizen: getString('isUsCitizen') === 'true',
       
       former_inmate: getString('formerInmate') === 'yes',
@@ -176,6 +175,7 @@ export async function POST(req: Request) {
 
     const pdfRecord: AppRecord = {
       first_name: getString('firstName'),
+      middle_name: getString('middleName'), // ✅ NEW: Middle name for PDF
       last_name: getString('lastName'),
       other_names: getString('otherNames'),
       date_of_birth: getString('dateOfBirth'),
@@ -241,6 +241,7 @@ export async function POST(req: Request) {
       const summaryData = {
         // Personal
         firstName: getString('firstName'),
+        middleName: getString('middleName'), // ✅ NEW: Middle name for summary
         lastName: getString('lastName'),
         otherNames: getString('otherNames'),
         dateOfBirth: getString('dateOfBirth'),
@@ -267,9 +268,10 @@ export async function POST(req: Request) {
         idState: getString('idState'),
         idExpiration: getString('idExpiration'),
         ssnMethod: getString('ssnMethod'),
+        ssnFirstFive: getString('ssnFirstFive'), // ✅ NEW: Include first 5 SSN for summary
         formerInmate: getString('formerInmate'),
         onParole: getString('onParole'),
-        isUsCitizen: getString('isUsCitizen'), // ✅ NEW: Include citizenship in summary
+        isUsCitizen: getString('isUsCitizen'),
         passportScan: formData.get('passportScan') as File | undefined,
         wardenLetter: formData.get('wardenLetter') as File | undefined,
         
@@ -301,7 +303,6 @@ export async function POST(req: Request) {
       
     } catch (summaryError) {
       console.error('Summary PDF generation failed:', summaryError);
-      // Don't fail the whole submission if summary fails
       console.warn('Continuing despite summary PDF failure');
     }
 
@@ -310,7 +311,6 @@ export async function POST(req: Request) {
     // ============================================
     const passportScanFile = formData.get('passportScan');
     
-    // ✅ NEW LOGIC: Passport required if non-citizen OR using passport as ID
     const isNonUsCitizen = application.is_us_citizen === false;
     const isPassportId = getString('governmentIdType') === 'passport';
     
