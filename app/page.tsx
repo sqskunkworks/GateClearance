@@ -28,14 +28,8 @@ export default async function HomePage() {
           <h2 className="text-5xl font-bold text-gray-900 mb-4">
             Gate Clearance for Visiting San Quentin SkunkWorks
           </h2>
-          <p className="text-xl text-gray-600 mb-2">
-            This gate clearance application is for <strong>invited SkunkWorks guests only</strong>.
-          </p>
-          <p className="text-xl text-gray-600 mb-2">
-            <strong>Submit at least 3 weeks before your visit.</strong> CDCR processing takes a minimum of 14 business days and can take longer.
-          </p>
           <p className="text-xl text-gray-600 mb-8">
-            Gate clearance is required for all visitors entering San Quentin State Prison. This process helps ensure a safe, respectful, and smooth experience for everyone inside.
+            This gate clearance application is for <strong>invited SkunkWorks guests only</strong>. <strong>Submit at least 3 weeks before your visit.</strong> CDCR processing takes a minimum of 14 business days and can take longer. Gate clearance is required for all visitors entering San Quentin State Prison. This process helps ensure a safe, respectful, and smooth experience for everyone inside.
           </p>
           
           {/* Security Badge */}
@@ -50,11 +44,13 @@ export default async function HomePage() {
         {/* About Section */}
         <div className="mb-16 text-center">
           <h3 className="text-2xl font-semibold mb-4">About San Quentin SkunkWorks</h3>
-          <p className="text-gray-600 mb-3">
-            You're here because you've been invited to visit San Quentin SkunkWorks.
+          <p className="text-gray-600 mb-4">
+            You're here because you've been invited to visit San Quentin SkunkWorks. SkunkWorks is an incarcerated-led innovation lab inside San Quentin. When you visit, you'll meet the inside team and see the work in progress.
           </p>
+          
+          {/* ✅ NEW: Social proof paragraph */}
           <p className="text-gray-600 mb-12">
-            SkunkWorks is an incarcerated-led innovation lab inside San Quentin. When you visit, you'll meet the inside team and see the work in progress.
+            San Quentin regularly hosts vetted visitors, including public officials, celebrities, researchers, educators, and community partners. Gate clearance is required for everyone entering the prison and helps ensure a safe, respectful, and smooth experience for everyone.
           </p>
           
           <h4 className="text-xl font-semibold mb-10">How Gate Clearance Works</h4>
@@ -95,15 +91,10 @@ export default async function HomePage() {
         {/* Before You Start */}
         <div className="mb-16 text-center">
           <h3 className="text-2xl font-semibold mb-4">Before You Start</h3>
-          <p className="text-gray-600 mb-3">Please make sure:</p>
-          <div className="max-w-2xl mx-auto text-left bg-gray-50 rounded-lg p-6">
-            <ul className="space-y-2 text-gray-700">
-              <li>• Your legal name matches your ID exactly</li>
-              <li>• Your ID is valid and not expired</li>
-              <li>• You can submit at least 3 weeks before your visit</li>
-            </ul>
-          </div>
-          <p className="text-sm text-gray-600 mt-4">
+          <p className="text-gray-600 mb-4">
+            Please make sure: Your legal name matches your ID exactly. Your ID is valid and not expired. You can submit at least 3 weeks before your visit.
+          </p>
+          <p className="text-gray-600">
             You'll be asked for your SSN and ID in the next step. If you're not ready, you may want to review visitor guidelines first.
           </p>
         </div>
@@ -111,62 +102,42 @@ export default async function HomePage() {
         {/* Know Before You Go */}
         <div className="mb-16 text-center">
           <h3 className="text-2xl font-semibold mb-4">Know Before You Go</h3>
-          <p className="text-gray-600 mb-6">
+          <p className="text-gray-600 mb-4">
             San Quentin operates under strict rules to protect everyone inside the facility. Following these guidelines helps ensure a smooth and respectful visit.
           </p>
-          
-          <div className="max-w-2xl mx-auto text-left bg-gray-50 rounded-lg p-6 mb-6">
-            <h4 className="font-semibold mb-3">Key reminders:</h4>
-            <ul className="space-y-2 text-gray-700 mb-6">
-              <li>• Avoid these colors: blue, gray, green, orange, yellow, or white</li>
-              <li>• Dress simply and professionally—no jeans, shorts, tight clothing, sleeveless tops, or open-toed shoes</li>
-              <li>• Leave personal items behind; bring only your ID (and a clear water bottle if needed)</li>
-              <li>• Please refrain from asking personal questions about people's pasts—these visits center leadership and work, not life stories</li>
-            </ul>
-            
-            <h4 className="font-semibold mb-3">Required reading:</h4>
-            <ul className="space-y-2 text-sm text-gray-700">
-              <li>
-                • Visitor FAQ:{' '}
-                <a href="https://link.sanquentinskunkworks.org/SQFAQ" target="_blank" rel="noopener noreferrer" className="text-black font-semibold hover:underline">
-                  https://link.sanquentinskunkworks.org/SQFAQ
-                </a>
-              </li>
-              <li>
-                • Visitor Rules:{' '}
-                <a href="https://link.sanquentinskunkworks.org/SQRules" target="_blank" rel="noopener noreferrer" className="text-black font-semibold hover:underline">
-                  https://link.sanquentinskunkworks.org/SQRules
-                </a>
-              </li>
-              <li>
-                • Dress Code:{' '}
-                <a href="https://link.sanquentinskunkworks.org/SQDressCode" target="_blank" rel="noopener noreferrer" className="text-black font-semibold hover:underline">
-                  https://link.sanquentinskunkworks.org/SQDressCode
-                </a>
-              </li>
-            </ul>
-          </div>
+          <p className="text-gray-600 mb-4">
+            <strong>Key reminders:</strong> Avoid these colors: blue, gray, green, orange, yellow, or white. Dress simply and professionally—no jeans, shorts, tight clothing, sleeveless tops, or open-toed shoes. Leave personal items behind; bring only your ID (and a clear water bottle if needed). Please refrain from asking personal questions about people's pasts—these visits center leadership and work, not life stories.
+          </p>
+          <p className="text-gray-600">
+            <strong>Required reading:</strong>{' '}
+            <a href="https://link.sanquentinskunkworks.org/SQFAQ" target="_blank" rel="noopener noreferrer" className="text-black font-semibold hover:underline">
+              Visitor FAQ
+            </a>
+            ,{' '}
+            <a href="https://link.sanquentinskunkworks.org/SQRules" target="_blank" rel="noopener noreferrer" className="text-black font-semibold hover:underline">
+              Visitor Rules
+            </a>
+            ,{' '}
+            <a href="https://link.sanquentinskunkworks.org/SQDressCode" target="_blank" rel="noopener noreferrer" className="text-black font-semibold hover:underline">
+              Dress Code
+            </a>
+          </p>
         </div>
 
-        {/* Why We Ask */}
+        {/* ✅ UPDATED: Why We Ask */}
         <div className="mb-16 text-center">
           <h3 className="text-2xl font-semibold mb-4">Why We Ask for This Information</h3>
-          <p className="text-gray-600 mb-3">
-            CDCR requires certain information to run a mandatory background check for entry into San Quentin State Prison.
+          <p className="text-gray-600 mb-4">
+            CDCR requires certain information to run a mandatory background check for entry into the facility.
           </p>
-          <p className="text-gray-600 mb-3">
+          <p className="text-gray-600 mb-2">
             San Quentin SkunkWorks also uses your contact information to:
           </p>
-          <div className="max-w-2xl mx-auto text-left bg-gray-50 rounded-lg p-6">
-            <ul className="space-y-2 text-gray-700">
-              <li>• Coordinate your visit</li>
-              <li>• Share clearance status updates</li>
-              <li>• Provide day-of arrival and logistics information</li>
-            </ul>
-          </div>
-          <p className="text-sm text-gray-600 mt-4">
-            We do not sell your information or use it for marketing or fundraising outreach.
-          </p>
+          <ul className="text-gray-600 space-y-1 max-w-md mx-auto text-left">
+            <li>• Coordinate your visit</li>
+            <li>• Share clearance status updates</li>
+            <li>• Provide day-of arrival and logistics information</li>
+          </ul>
         </div>
 
         {/* CTA */}
@@ -206,49 +177,39 @@ export default async function HomePage() {
       {/* Footer */}
       <footer className="border-t mt-20 py-8">
         <div className="max-w-4xl mx-auto px-6 text-center text-sm text-gray-600">
-          <h4 className="font-semibold mb-4">Need Help?</h4>
-          <div className="space-y-3 mb-6">
-            <p>
-              Questions about clearance, scheduling, or your visit:
-            </p>
-            <p>
-              📧{' '}
-              <a 
-                href="mailto:clearance@sanquentinskunkworks.org" 
-                className="text-black font-semibold hover:underline"
-              >
-                clearance@sanquentinskunkworks.org
-              </a>
-              {' '}(we typically respond within one business day)
-            </p>
-            <p>
-              Having trouble with this form? Use the legacy gate clearance form:{' '}
-              <a 
-                href="https://link.sanquentinskunkworks.org/gate-clearance" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-black font-semibold hover:underline"
-              >
-                https://link.sanquentinskunkworks.org/gate-clearance
-              </a>
-            </p>
-            <p>
-              Technical issues (login, errors, page not loading):
-            </p>
-            <p>
-              📧{' '}
-              <a 
-                href="mailto:codeworks@sanquentinskunkworks.org" 
-                className="text-black font-semibold hover:underline"
-              >
-                codeworks@sanquentinskunkworks.org
-              </a>
-            </p>
-          </div>
-          <div className="border-t pt-6">
-            <p className="mb-2">© 2026 San Quentin SkunkWorks</p>
-            <p>A 501(c)(3) nonprofit operating with CDCR approval inside San Quentin State Prison</p>
-          </div>
+          <p className="font-semibold mb-2">Need Help?</p>
+          <p className="mb-2">
+            Questions about clearance, scheduling, or your visit: 📧{' '}
+            <a 
+              href="mailto:clearance@sanquentinskunkworks.org" 
+              className="text-black font-semibold hover:underline"
+            >
+              clearance@sanquentinskunkworks.org
+            </a>
+            {' '}(we typically respond within one business day)
+          </p>
+          <p className="mb-2">
+            Having trouble with this form? Use the legacy gate clearance form:{' '}
+            <a 
+              href="https://link.sanquentinskunkworks.org/gate-clearance" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-black font-semibold hover:underline"
+            >
+              https://link.sanquentinskunkworks.org/gate-clearance
+            </a>
+          </p>
+          <p className="mb-4">
+            Technical issues (login, errors, page not loading): 📧{' '}
+            <a 
+              href="mailto:codeworks@sanquentinskunkworks.org" 
+              className="text-black font-semibold hover:underline"
+            >
+              codeworks@sanquentinskunkworks.org
+            </a>
+          </p>
+          <p className="mt-2">© 2026 San Quentin SkunkWorks</p>
+          <p>A 501(c)(3) nonprofit operating with CDCR approval inside San Quentin State Prison</p>
         </div>
       </footer>
     </div>
