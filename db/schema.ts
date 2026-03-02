@@ -32,6 +32,7 @@ export const governmentIdTypeEnum = pgEnum("government_id_type", [
   "driver_license",
   "passport",
   "other",
+  "other",
 ]);
 
 export const applicationTypeEnum = pgEnum("application_type", [
@@ -43,10 +44,14 @@ export const applicationTypeEnum = pgEnum("application_type", [
 /* ========= Tables ========= */
 export const applications = pgTable("applications", {
   // Primary Key
+  // Primary Key
   id: uuid("id").defaultRandom().primaryKey(),
 
   // Auth / User
+  // Auth / User
   userId: text("user_id").notNull(),
+
+  // Contact
 
   // Contact
   email: text("email").notNull(),
@@ -56,11 +61,13 @@ export const applications = pgTable("applications", {
 
   // Personal Information
   firstName: text("first_name").notNull(),
+  middleName: text("middle_name"), // Full middle name (optional)
   lastName: text("last_name").notNull(),
   otherNames: text("other_names"), // nullable
   dateOfBirth: date("date_of_birth").notNull(), // date type, not text
   gender: genderEnum("gender").notNull(),
 
+  // Contact & Organization
   // Contact & Organization
   phoneNumber: text("phone_number").notNull(),
   companyOrOrganization: text("company_or_organization").notNull(),

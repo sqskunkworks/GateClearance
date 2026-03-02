@@ -20,6 +20,7 @@ export const personalConfig: SectionConfig = {
   ctaLabel: 'Continue',
   fields: [
     { kind: 'text', name: 'firstName', label: 'First name', required: true },
+    { kind: 'text', name: 'middleName', label: 'Middle name (optional)' }, // ✅ NEW
     { kind: 'text', name: 'lastName', label: 'Last name', required: true },
     { kind: 'text', name: 'otherNames', label: 'Other names (optional)', span: 2 },
     {
@@ -198,6 +199,17 @@ export const securityConfig: SectionConfig = {
   columns: 1,
   ctaLabel: 'Submit Application',
   fields: [
+    // Citizenship question FIRST
+    {
+      kind: 'radio',
+      name: 'isUsCitizen',
+      label: 'Are you a US Citizen?',
+      required: true,
+      options: [
+        { label: 'Yes, I am a US Citizen', value: 'true' },
+        { label: 'No, I am not a US Citizen', value: 'false' },
+      ],
+    },
     {
       kind: 'radio',
       name: 'governmentIdType',
@@ -237,14 +249,19 @@ export const securityConfig: SectionConfig = {
       required: true,
       placeholder: 'MM-DD-YYYY',
     },
+    // Passport upload shows for non-citizens OR passport ID holders
     {
       name: 'passportScan',
       label: 'Upload Passport Scan',
       kind: 'file',  
-      required: true,
+      required: false, // Validated in backend based on citizenship
       accept: '.pdf,.jpg,.jpeg,.png',
-      helpText: 'Please upload a clear scan of your passport (PDF, JPG, or PNG, max 5MB)',
-      showIf: (values: Record<string, unknown>) => values.governmentIdType === 'passport', 
+      helpText: 'Required for non-US citizens or if using passport as ID. Upload a clear scan of your passport photo page (PDF, JPG, or PNG, max 5MB)',
+      showIf: (values: Record<string, unknown>) => {
+        const isNonCitizen = values.isUsCitizen === 'false' || values.isUsCitizen === false;
+        const isPassportId = values.governmentIdType === 'passport';
+        return isNonCitizen || isPassportId;
+      },
     },
     {
       kind: 'radio',

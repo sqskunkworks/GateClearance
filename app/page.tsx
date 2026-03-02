@@ -44,8 +44,13 @@ export default async function HomePage() {
         {/* About Section */}
         <div className="mb-16 text-center">
           <h3 className="text-2xl font-semibold mb-4">About San Quentin SkunkWorks</h3>
-          <p className="text-gray-600 mb-12">
+          <p className="text-gray-600 mb-4">
             You're here because you've been invited to visit San Quentin SkunkWorks. SkunkWorks is an incarcerated-led innovation lab inside San Quentin. When you visit, you'll meet the inside team and see the work in progress.
+          </p>
+          
+          {/* ✅ NEW: Social proof paragraph */}
+          <p className="text-gray-600 mb-12">
+            San Quentin regularly hosts vetted visitors, including public officials, celebrities, researchers, educators, and community partners. Gate clearance is required for everyone entering the prison and helps ensure a safe, respectful, and smooth experience for everyone.
           </p>
           
           <h4 className="text-xl font-semibold mb-10">How Gate Clearance Works</h4>
@@ -119,18 +124,20 @@ export default async function HomePage() {
           </p>
         </div>
 
-        {/* Why We Ask */}
+        {/* ✅ UPDATED: Why We Ask */}
         <div className="mb-16 text-center">
           <h3 className="text-2xl font-semibold mb-4">Why We Ask for This Information</h3>
           <p className="text-gray-600 mb-4">
-            CDCR requires certain information to run a mandatory background check for entry into San Quentin State Prison.
+            CDCR requires certain information to run a mandatory background check for entry into the facility.
           </p>
-          <p className="text-gray-600 mb-4">
-            San Quentin SkunkWorks also uses your contact information to: Coordinate your visit. Share clearance status updates. Provide day-of arrival and logistics information.
+          <p className="text-gray-600 mb-2">
+            San Quentin SkunkWorks also uses your contact information to:
           </p>
-          <p className="text-gray-600">
-            We do not sell your information or use it for marketing or fundraising outreach.
-          </p>
+          <ul className="text-gray-600 space-y-1 max-w-md mx-auto text-left">
+            <li>• Coordinate your visit</li>
+            <li>• Share clearance status updates</li>
+            <li>• Provide day-of arrival and logistics information</li>
+          </ul>
         </div>
 
         {/* CTA - Two Application Types */}

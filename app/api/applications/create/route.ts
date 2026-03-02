@@ -69,6 +69,7 @@ export async function POST(req: Request) {
       
       // Step 1: Personal info (real data)
       first_name: formData.firstName,
+      middle_name: formData.middleName || null, // ✅ NEW: Middle name
       last_name: formData.lastName,
       other_names: formData.otherNames || null,
       date_of_birth: convertToDBDate(formData.dateOfBirth),

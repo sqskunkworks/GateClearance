@@ -20,7 +20,6 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-   
 
     const authSupabase = await createClient();
     const { data: { user }, error: authError } = await authSupabase.auth.getUser();

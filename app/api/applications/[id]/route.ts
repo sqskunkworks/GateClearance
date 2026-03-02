@@ -53,6 +53,7 @@ export async function GET(
     // Transform to form format, filtering out placeholder values
     const formData: Record<string, unknown> = {
       firstName: data.first_name || '',
+      middleName: data.middle_name || '', // ✅ NEW: Middle name
       lastName: data.last_name || '',
       otherNames: data.other_names || '',
       dateOfBirth: convertToFormDate(data.date_of_birth),
@@ -77,6 +78,9 @@ export async function GET(
       idState: data.id_state || '',
       idExpiration: convertToFormDate(data.id_expiration),
       digitalSignature: data.digital_signature || '',
+      
+      // ✅ CRITICAL FIX: Return citizenship status (was missing!)
+      isUsCitizen: data.is_us_citizen === null ? '' : (data.is_us_citizen ? 'true' : 'false'),
       
       // Background questions (only for submitted applications)
       formerInmate: isNewDraft ? '' : (data.former_inmate ? 'yes' : 'no'),
