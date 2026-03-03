@@ -325,15 +325,7 @@ export const securityConfig: SectionConfig = {
         { label: 'No', value: 'no' },
       ],
     },
-    {
-      name: 'wardenLetter',
-      label: 'Upload clearance request letter to San Quentin',
-      kind: 'file', 
-      required: true,
-      accept: '.pdf,.jpg,.jpeg,.png',
-      helpText: 'Upload a formal letter requesting visitor clearance addressed to San Quentin (PDF, JPG, or PNG, max 5MB)',
-      showIf: (values: Record<string, unknown>) => values.formerInmate === 'yes', 
-    },
+    
     {
       kind: 'radio',
       name: 'onParole',
@@ -344,6 +336,16 @@ export const securityConfig: SectionConfig = {
         { label: 'No', value: 'no' },
       ],
     },
+    {
+      name: 'wardenLetter',
+      label: 'Upload clearance request letter to San Quentin',
+      kind: 'file', 
+      required: true,
+      accept: '.pdf,.jpg,.jpeg,.png',
+      helpText: 'Upload a formal letter requesting visitor clearance addressed to San Quentin (PDF, JPG, or PNG, max 5MB)',
+      showIf: (values: Record<string, unknown>) => values.onParole === 'yes', 
+    },
+
     {
       kind: 'checkbox',
       name: 'confirmAccuracy',

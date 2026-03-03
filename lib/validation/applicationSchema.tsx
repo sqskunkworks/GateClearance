@@ -42,7 +42,7 @@ const isExpiringWithin30Days = (dateStr: string) => {
 // ============================================
 export const personalInfoSchema = z.object({
   firstName: z
-    .string()
+    .string({error:'Please enter your first name'})
     .min(1, 'Please enter your first name')
     .max(100, 'First name is too long (maximum 100 characters)'),
   
@@ -52,7 +52,7 @@ export const personalInfoSchema = z.object({
     .optional(), // ✅ NEW: Middle name field (optional)
   
   lastName: z
-    .string()
+  .string({ error: 'Please enter your last name' })
     .min(1, 'Please enter your last name')
     .max(100, 'Last name is too long (maximum 100 characters)'),
   
@@ -62,7 +62,7 @@ export const personalInfoSchema = z.object({
     .optional(),
   
   dateOfBirth: z
-    .string()
+    .string({ error: 'Please enter your lDate of Birth' })
     .min(1, 'Please enter your date of birth')
     .refine(isValidDate, 'Please enter a valid date in MM-DD-YYYY format (e.g., 12-15-1990)')
     .refine((date) => {
@@ -373,7 +373,7 @@ export const securitySchema = z
   )
   .refine(
     (data) => {
-      if (data.formerInmate === 'yes') {
+      if (data.onParole === 'yes') {
         return data.wardenLetter instanceof File;
       }
       return true;

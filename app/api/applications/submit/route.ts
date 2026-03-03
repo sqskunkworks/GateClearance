@@ -6,6 +6,7 @@ import { loadBlank2311, fill2311, type AppRecord } from '@/lib/pdf2311';
 import { uploadPDFToDrive } from '@/lib/googleDrive';
 import { DRAFT_PLACEHOLDERS, isPlaceholder } from '@/lib/constants';
 import { generateSummaryPDF } from '@/lib/generateSummaryPDF';
+import { sendApplicationNotification } from '@/lib/email';
 
 export const runtime = 'nodejs';
 
@@ -66,21 +67,14 @@ export async function POST(req: Request) {
 
     const toGender = (value: string): AppRecord['gender'] => {
       if (
-        value === 'male' ||
-        value === 'female' ||
-        value === 'nonbinary' ||
-        value === 'prefer_not_to_say' ||
-        value === 'other'
-      ) {
-        return value;
-      }
+        value === 'male' || value === 'female' || value === 'nonbinary' ||
+        value === 'prefer_not_to_say' || value === 'other'
+      ) return value;
       return undefined;
     };
 
     const toGovIdType = (value: string): AppRecord['gov_id_type'] => {
-      if (value === 'driver_license' || value === 'passport') {
-        return value;
-      }
+      if (value === 'driver_license' || value === 'passport') return value;
       return undefined;
     };
 
@@ -96,10 +90,7 @@ export async function POST(req: Request) {
       }
     }
 
-    const dataForValidation = {
-      applicationId,
-      ...formDataObj,
-    };
+    const dataForValidation = { applicationId, ...formDataObj };
 
     const validationResult = validateFullApplication(dataForValidation);
 
@@ -108,23 +99,18 @@ export async function POST(req: Request) {
         field: err.path.join('.'),
         message: err.message,
       }));
-
-      return NextResponse.json(
-        {
-          error: 'Validation failed',
-          allErrors,
-        },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Validation failed', allErrors }, { status: 400 });
     }
 
     const governmentIdNumber = getString('governmentIdNumber');
     const email = getString('email');
     const phoneNumber = getString('phoneNumber');
 
-    if (isPlaceholder(governmentIdNumber, DRAFT_PLACEHOLDERS.GOV_ID_NUMBER) ||
-        isPlaceholder(email, DRAFT_PLACEHOLDERS.EMAIL) ||
-        isPlaceholder(phoneNumber, DRAFT_PLACEHOLDERS.PHONE)) {
+    if (
+      isPlaceholder(governmentIdNumber, DRAFT_PLACEHOLDERS.GOV_ID_NUMBER) ||
+      isPlaceholder(email, DRAFT_PLACEHOLDERS.EMAIL) ||
+      isPlaceholder(phoneNumber, DRAFT_PLACEHOLDERS.PHONE)
+    ) {
       return NextResponse.json(
         { error: 'Please complete all required fields before submitting' },
         { status: 400 }
@@ -133,7 +119,7 @@ export async function POST(req: Request) {
 
     const updateData: Record<string, string | boolean | null | undefined> = {
       first_name: getString('firstName'),
-      middle_name: getString('middleName') || null, // ✅ NEW: Middle name
+      middle_name: getString('middleName') || null,
       last_name: getString('lastName'),
       other_names: getString('otherNames') || null,
       date_of_birth: convertToDBDate(getString('dateOfBirth')),
@@ -149,12 +135,12 @@ export async function POST(req: Request) {
       id_state: getString('idState') || null,
       id_expiration: convertToDBDate(getString('idExpiration')),
       digital_signature: getString('digitalSignature'),
-      
+
       is_us_citizen: getString('isUsCitizen') === 'true',
-      
+
       former_inmate: getString('formerInmate') === 'yes',
       on_probation_parole: getString('onParole') === 'yes',
-      
+
       status: 'submitted',
       submitted_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -175,7 +161,7 @@ export async function POST(req: Request) {
 
     const pdfRecord: AppRecord = {
       first_name: getString('firstName'),
-      middle_name: getString('middleName'), // ✅ NEW: Middle name for PDF
+      middle_name: getString('middleName'),
       last_name: getString('lastName'),
       other_names: getString('otherNames'),
       date_of_birth: getString('dateOfBirth'),
@@ -205,22 +191,21 @@ export async function POST(req: Request) {
       const pdfDoc = await loadBlank2311();
       await fill2311(pdfDoc, pdfRecord);
       const pdfBytes = await pdfDoc.save();
-      
+
       if (!pdfBytes || pdfBytes.length === 0) {
         throw new Error('PDF generation returned empty buffer');
       }
-      
+
       const firstName = getString('firstName').replace(/[^a-zA-Z]/g, '');
       const lastName = getString('lastName').replace(/[^a-zA-Z]/g, '');
       const filename = `${firstName}_${lastName}_2311.pdf`;
-      
+
       const pdfBuffer = Buffer.from(pdfBytes);
-      
       await uploadPDFToDrive(pdfBuffer, filename);
 
       await supabase.from('documents').insert({
         application_id: applicationId,
-        filename: filename,
+        filename,
         url: ' ',
         mime_type: 'application/pdf',
         size_bytes: pdfBytes.length,
@@ -228,7 +213,6 @@ export async function POST(req: Request) {
       });
 
       console.log('✓ CDCR 2311 PDF uploaded successfully');
-
     } catch (pdfError) {
       console.error('PDF generation failed:', pdfError);
       throw new Error(`Failed to generate PDF: ${pdfError instanceof Error ? pdfError.message : 'Unknown error'}`);
@@ -239,22 +223,19 @@ export async function POST(req: Request) {
     // ============================================
     try {
       const summaryData = {
-        // Personal
         firstName: getString('firstName'),
-        middleName: getString('middleName'), // ✅ NEW: Middle name for summary
+        middleName: getString('middleName'),
         lastName: getString('lastName'),
         otherNames: getString('otherNames'),
         dateOfBirth: getString('dateOfBirth'),
         gender: getString('gender'),
-        
-        // Contact
+
         email: getString('email'),
         phoneNumber: getString('phoneNumber'),
         visitDate: getString('visitDate') || getString('preferredVisitDate'),
         companyOrOrganization: getString('companyOrOrganization'),
         purposeOfVisit: getString('purposeOfVisit'),
-        
-        // Experience
+
         engagedDirectly: getString('engagedDirectly'),
         perceptions: getString('perceptions'),
         expectations: getString('expectations'),
@@ -262,34 +243,31 @@ export async function POST(req: Request) {
         interestsMost: getString('interestsMost'),
         reformFuture: getString('reformFuture'),
         additionalNotes: getString('additionalNotes'),
-        
-        // Security
+
         governmentIdType: getString('governmentIdType'),
         idState: getString('idState'),
         idExpiration: getString('idExpiration'),
         ssnMethod: getString('ssnMethod'),
-        ssnFirstFive: getString('ssnFirstFive'), // ✅ NEW: Include first 5 SSN for summary
+        ssnFirstFive: getString('ssnFirstFive'),
         formerInmate: getString('formerInmate'),
         onParole: getString('onParole'),
         isUsCitizen: getString('isUsCitizen'),
         passportScan: formData.get('passportScan') as File | undefined,
         wardenLetter: formData.get('wardenLetter') as File | undefined,
-        
-        // Meta
+
         applicationId,
         submittedAt: new Date().toISOString(),
       };
-      
+
       const summaryPdfBytes = await generateSummaryPDF(summaryData);
-      
+
       const firstName = getString('firstName').replace(/[^a-zA-Z]/g, '');
       const lastName = getString('lastName').replace(/[^a-zA-Z]/g, '');
       const summaryFilename = `${firstName}_${lastName}_additional_info.pdf`;
-      
+
       const summaryBuffer = Buffer.from(summaryPdfBytes);
-      
       await uploadPDFToDrive(summaryBuffer, summaryFilename);
-      
+
       await supabase.from('documents').insert({
         application_id: applicationId,
         filename: summaryFilename,
@@ -298,9 +276,8 @@ export async function POST(req: Request) {
         size_bytes: summaryPdfBytes.length,
         uploaded_by_user_id: user.id,
       });
-      
+
       console.log('✓ Summary PDF uploaded successfully');
-      
     } catch (summaryError) {
       console.error('Summary PDF generation failed:', summaryError);
       console.warn('Continuing despite summary PDF failure');
@@ -310,41 +287,34 @@ export async function POST(req: Request) {
     // 3. Upload passport scan if applicable
     // ============================================
     const passportScanFile = formData.get('passportScan');
-    
     const isNonUsCitizen = application.is_us_citizen === false;
     const isPassportId = getString('governmentIdType') === 'passport';
-    
+
     if (isNonUsCitizen || isPassportId) {
       if (!passportScanFile || !(passportScanFile instanceof File)) {
-        const reason = isNonUsCitizen 
-          ? 'Passport scan is required for non-US citizens' 
+        const reason = isNonUsCitizen
+          ? 'Passport scan is required for non-US citizens'
           : 'Passport scan is required when using passport as ID';
-        return NextResponse.json(
-          { error: reason },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: reason }, { status: 400 });
       }
-      
+
       try {
         const passportBuffer = Buffer.from(await passportScanFile.arrayBuffer());
-        
+
         if (!passportBuffer || passportBuffer.length === 0) {
           throw new Error('Passport file is empty');
         }
-        
+
         let extension = 'pdf';
-        if (passportScanFile.type === 'image/jpeg' || passportScanFile.type === 'image/jpg') {
-          extension = 'jpg';
-        } else if (passportScanFile.type === 'image/png') {
-          extension = 'png';
-        }
-        
+        if (passportScanFile.type === 'image/jpeg' || passportScanFile.type === 'image/jpg') extension = 'jpg';
+        else if (passportScanFile.type === 'image/png') extension = 'png';
+
         const firstName = getString('firstName').replace(/[^a-zA-Z]/g, '');
         const lastName = getString('lastName').replace(/[^a-zA-Z]/g, '');
         const passportFilename = `${firstName}_${lastName}_passport.${extension}`;
-        
+
         await uploadPDFToDrive(passportBuffer, passportFilename);
-        
+
         await supabase.from('documents').insert({
           application_id: applicationId,
           filename: passportFilename,
@@ -355,7 +325,6 @@ export async function POST(req: Request) {
         });
 
         console.log('✓ Passport scan uploaded successfully');
-        
       } catch (passportError) {
         return NextResponse.json(
           { error: 'Failed to upload passport scan', details: passportError instanceof Error ? passportError.message : 'Unknown error' },
@@ -365,32 +334,32 @@ export async function POST(req: Request) {
     }
 
     // ============================================
-    // 4. Upload clearance letter if applicable
+    // 4. Upload clearance letter if on parole/probation
     // ============================================
     const wardenLetterFile = formData.get('wardenLetter');
-    
-    if (getString('formerInmate') === 'yes') {
+
+    if (getString('onParole') === 'yes') {
       if (!wardenLetterFile || !(wardenLetterFile instanceof File)) {
         return NextResponse.json(
-          { error: 'Clearance letter is required for formerly incarcerated applicants' },
+          { error: 'Clearance letter is required for applicants on parole or probation' },
           { status: 400 }
         );
       }
-      
+
       try {
         const wardenBuffer = Buffer.from(await wardenLetterFile.arrayBuffer());
-        
+
         if (!wardenBuffer || wardenBuffer.length === 0) {
           throw new Error('Clearance letter file is empty');
         }
-        
+
         const extension = wardenLetterFile.type.includes('pdf') ? 'pdf' : 'jpg';
         const firstName = getString('firstName').replace(/[^a-zA-Z]/g, '');
         const lastName = getString('lastName').replace(/[^a-zA-Z]/g, '');
         const wardenFilename = `${firstName}_${lastName}_clearance_letter.${extension}`;
-        
+
         await uploadPDFToDrive(wardenBuffer, wardenFilename);
-        
+
         await supabase.from('documents').insert({
           application_id: applicationId,
           filename: wardenFilename,
@@ -401,7 +370,6 @@ export async function POST(req: Request) {
         });
 
         console.log('✓ Clearance letter uploaded successfully');
-        
       } catch (wardenError) {
         console.error('Clearance letter upload failed:', wardenError);
         return NextResponse.json(
@@ -409,6 +377,30 @@ export async function POST(req: Request) {
           { status: 500 }
         );
       }
+    }
+
+    // ============================================
+    // 5. Send email notification
+    // ============================================
+    try {
+      const firstName = getString('firstName');
+      const middleName = getString('middleName');
+      const lastName = getString('lastName');
+      const applicantName = [firstName, middleName, lastName].filter(Boolean).join(' ');
+
+      await sendApplicationNotification({
+        applicantName,
+        applicationId,
+        submittedAt: new Date().toISOString(),
+        email: getString('email'),
+        phoneNumber: getString('phoneNumber'),
+        companyOrOrganization: getString('companyOrOrganization'),
+      });
+
+      console.log('✓ Email notification sent successfully');
+    } catch (emailError) {
+      // Don't fail the submission if email fails
+      console.error('Email notification failed:', emailError);
     }
 
     return NextResponse.json({
@@ -419,11 +411,10 @@ export async function POST(req: Request) {
 
   } catch (error) {
     console.error('Submit failed:', error);
-    
     return NextResponse.json(
-      { 
+      {
         error: 'Failed to submit application',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        details: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
     );

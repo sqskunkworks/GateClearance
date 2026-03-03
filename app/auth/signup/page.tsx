@@ -13,64 +13,49 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
-
   const supabase = createClient();
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
-  
     try {
       const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-          },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
+        email, password,
+        options: { data: { full_name: fullName }, emailRedirectTo: `${window.location.origin}/auth/callback` },
       });
-  
       if (error) {
-        // Check for specific error types
         if (error.message.includes('already registered') || error.message.includes('already exists')) {
           setError('This email is already registered. Please sign in instead.');
           return;
         }
         throw error;
       }
-  
-      // Check if email confirmation is disabled (user already verified)
       if (data?.user && data.user.identities && data.user.identities.length === 0) {
-        // Email already registered and confirmed
         setError('This email is already registered. Please sign in instead.');
         return;
       }
-  
-      // Redirect to check-email page
       router.push(`/auth/check-email?email=${encodeURIComponent(email)}`);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to create account';
-      setError(message);
+      setError(err instanceof Error ? err.message : 'Failed to create account');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: '#f9f8f6' }}>
       <div className="w-full max-w-md">
+
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-black rounded-2xl mb-4">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4" style={{ backgroundColor: '#1C3D5A' }}>
             <Shield className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Create Account</h1>
-          <p className="text-gray-600 mt-2">Get started with your clearance application</p>
+          <h1 className="text-2xl font-bold" style={{ color: '#1F2933' }}>Create Account</h1>
+          <p className="mt-2 text-sm" style={{ color: '#1C3D5A' }}>Get started with your clearance application</p>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
+        <div className="bg-white rounded-2xl shadow-sm p-8" style={{ border: '1px solid #E6E1D8' }}>
           <form onSubmit={handleSignup} className="space-y-5">
             {error && (
               <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-900">
@@ -80,77 +65,55 @@ export default function SignupPage() {
             )}
 
             <div>
-              <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-2">
-                Full Name
-              </label>
+              <label htmlFor="fullName" className="block text-sm font-medium mb-2" style={{ color: '#1F2933' }}>Full Name</label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  id="fullName"
-                  type="text"
-                  required
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="John Doe"
-                  className="w-full pl-11 pr-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: '#1C3D5A' }} />
+                <input id="fullName" type="text" required value={fullName}
+                  onChange={(e) => setFullName(e.target.value)} placeholder="John Doe"
+                  className="w-full pl-11 pr-4 py-2.5 rounded-xl focus:outline-none focus:ring-2"
+                  style={{ border: '1px solid #E6E1D8' }}
                 />
               </div>
             </div>
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                Email
-              </label>
+              <label htmlFor="email" className="block text-sm font-medium mb-2" style={{ color: '#1F2933' }}>Email</label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  id="email"
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  className="w-full pl-11 pr-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: '#1C3D5A' }} />
+                <input id="email" type="email" required value={email}
+                  onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com"
+                  className="w-full pl-11 pr-4 py-2.5 rounded-xl focus:outline-none focus:ring-2"
+                  style={{ border: '1px solid #E6E1D8' }}
                 />
               </div>
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                Password
-              </label>
+              <label htmlFor="password" className="block text-sm font-medium mb-2" style={{ color: '#1F2933' }}>Password</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  id="password"
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  minLength={6}
-                  className="w-full pl-11 pr-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: '#1C3D5A' }} />
+                <input id="password" type="password" required value={password}
+                  onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" minLength={6}
+                  className="w-full pl-11 pr-4 py-2.5 rounded-xl focus:outline-none focus:ring-2"
+                  style={{ border: '1px solid #E6E1D8' }}
                 />
               </div>
-              <p className="mt-1 text-xs text-gray-500">Must be at least 6 characters</p>
+              <p className="mt-1 text-xs" style={{ color: '#1C3D5A' }}>Must be at least 6 characters</p>
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className={`w-full py-3 px-4 rounded-xl font-semibold text-white transition-colors ${
-                loading
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-black hover:bg-gray-800'
-              }`}
+            <button type="submit" disabled={loading}
+              className="w-full py-3 px-4 rounded-xl font-semibold text-white transition-colors"
+              style={{ backgroundColor: loading ? '#9ca3af' : '#355F7A', cursor: loading ? 'not-allowed' : 'pointer' }}
+              onMouseEnter={e => { if (!loading) e.currentTarget.style.backgroundColor = '#2A4F67'; }}
+              onMouseLeave={e => { if (!loading) e.currentTarget.style.backgroundColor = '#355F7A'; }}
             >
               {loading ? 'Creating account...' : 'Sign Up'}
             </button>
           </form>
 
-          <div className="mt-6 text-center text-sm text-gray-600">
+          <div className="mt-6 text-center text-sm" style={{ color: '#1C3D5A' }}>
             Already have an account?{' '}
-            <Link href="/auth/login" className="font-semibold text-black hover:underline">
+            <Link href="/auth/login" className="font-semibold hover:underline" style={{ color: '#355F7A' }}>
               Sign in
             </Link>
           </div>
