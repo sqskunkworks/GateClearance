@@ -83,7 +83,16 @@ function LoginPageContent() {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium mb-2" style={{ color: '#1F2933' }}>Password</label>
+              <div className="flex items-center justify-between mb-2">
+                <label htmlFor="password" className="block text-sm font-medium" style={{ color: '#1F2933' }}>Password</label>
+                <Link
+                  href="/auth/forgot-password"
+                  className="text-xs font-medium hover:underline"
+                  style={{ color: '#355F7A' }}
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: '#1C3D5A' }} />
                 <input

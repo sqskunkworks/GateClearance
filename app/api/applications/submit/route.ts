@@ -395,6 +395,10 @@ export async function POST(req: Request) {
         email: getString('email'),
         phoneNumber: getString('phoneNumber'),
         companyOrOrganization: getString('companyOrOrganization'),
+        hasConfirmedDate: getString('hasConfirmedDate'),
+        visitDate1: getString('visitDate1') || undefined,
+        visitDate2: getString('visitDate2') || undefined,
+        visitDate3: getString('visitDate3') || undefined
       });
 
       console.log('✓ Email notification sent successfully');

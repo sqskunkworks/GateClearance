@@ -41,10 +41,17 @@ export default function StepPage() {
 
       const { draft }: { draft: FormValues } = await response.json();
 
-      const visitDate = sessionStorage.getItem(`app_${appId}_visitDate`);
-      if (visitDate) {
-        draft.visitDate = visitDate;
-        draft.preferredVisitDate = visitDate;
+      // Visit dates: DB takes priority, sessionStorage fills in if DB empty
+      // (handles case where user filled in dates but hasn't hit Continue yet)
+      const storedDates = sessionStorage.getItem(`app_${appId}_visitDates`);
+      if (storedDates) {
+        try {
+          const parsed = JSON.parse(storedDates);
+          if (!draft.hasConfirmedDate && parsed.hasConfirmedDate) draft.hasConfirmedDate = parsed.hasConfirmedDate;
+          if (!draft.visitDate1 && parsed.visitDate1) draft.visitDate1 = parsed.visitDate1;
+          if (!draft.visitDate2 && parsed.visitDate2) draft.visitDate2 = parsed.visitDate2;
+          if (!draft.visitDate3 && parsed.visitDate3) draft.visitDate3 = parsed.visitDate3;
+        } catch {}
       }
 
       if (
@@ -129,15 +136,21 @@ export default function StepPage() {
 
     // ID cleanup
     if (updatedFormData.governmentIdType !== 'driver_license') delete updatedFormData.idState;
-// Keep passportScan if non-citizen OR using passport as ID
-const isNonCitizen = updatedFormData.isUsCitizen === 'false';
-const isPassportId = updatedFormData.governmentIdType === 'passport';
-if (!isNonCitizen && !isPassportId) {
-  delete updatedFormData.passportScan;
-}
 
-    // Parole/probation cleanup
+    // Passport scan cleanup
+    const isNonCitizen = updatedFormData.isUsCitizen === 'false';
+    const isPassportId = updatedFormData.governmentIdType === 'passport';
+    if (!isNonCitizen && !isPassportId) delete updatedFormData.passportScan;
+
+    // Parole cleanup
     if (updatedFormData.onParole !== 'yes') delete updatedFormData.wardenLetter;
+
+    // Visit date cleanup
+    if (updatedFormData.hasConfirmedDate !== 'yes') {
+      delete updatedFormData.visitDate1;
+      delete updatedFormData.visitDate2;
+      delete updatedFormData.visitDate3;
+    }
 
     if (updatedFormData.governmentIdNumber && typeof updatedFormData.governmentIdNumber === 'string')
       updatedFormData.governmentIdNumber = updatedFormData.governmentIdNumber.replace(/-/g, '');
@@ -173,9 +186,13 @@ if (!isNonCitizen && !isPassportId) {
       }
 
       if (currentStep === 2) {
-        const visitDate = updatedFormData.visitDate || updatedFormData.preferredVisitDate;
-        if (typeof visitDate === 'string' && visitDate)
-          sessionStorage.setItem(`app_${applicationId}_visitDate`, visitDate);
+        // Save visit dates to sessionStorage as backup until DB confirms
+        sessionStorage.setItem(`app_${applicationId}_visitDates`, JSON.stringify({
+          hasConfirmedDate: updatedFormData.hasConfirmedDate,
+          visitDate1: updatedFormData.visitDate1,
+          visitDate2: updatedFormData.visitDate2,
+          visitDate3: updatedFormData.visitDate3,
+        }));
 
         const response = await fetch(`/api/applications/${applicationId}/contact`, {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -250,7 +267,7 @@ if (!isNonCitizen && !isPassportId) {
           return;
         }
 
-        sessionStorage.removeItem(`app_${applicationId}_visitDate`);
+        sessionStorage.removeItem(`app_${applicationId}_visitDates`);
         router.push(`/test-application/success?id=${applicationId}`);
       }
     } catch (error) {
@@ -275,7 +292,6 @@ if (!isNonCitizen && !isPassportId) {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#f9f8f6' }}>
-      {/* Submitting overlay */}
       {isSubmitting && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
           <div className="bg-white rounded-2xl p-8 shadow-2xl max-w-md mx-4">
@@ -290,7 +306,6 @@ if (!isNonCitizen && !isPassportId) {
         </div>
       )}
 
-      {/* Step header */}
       <div className="bg-white border-b shadow-sm sticky top-0 z-10" style={{ borderColor: '#E6E1D8' }}>
         <div className="max-w-3xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between mb-4">

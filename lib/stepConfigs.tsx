@@ -20,7 +20,7 @@ export const personalConfig: SectionConfig = {
   ctaLabel: 'Continue',
   fields: [
     { kind: 'text', name: 'firstName', label: 'First name', required: true },
-    { kind: 'text', name: 'middleName', label: 'Middle name (optional)' }, // ✅ NEW
+    { kind: 'text', name: 'middleName', label: 'Middle name (optional)' },
     { kind: 'text', name: 'lastName', label: 'Last name', required: true },
     { kind: 'text', name: 'otherNames', label: 'Other names (optional)', span: 2 },
     {
@@ -65,12 +65,6 @@ export const contactOrgConfig: SectionConfig = {
       required: true,
       placeholder: '(415) 555-1234',
     },
-    {
-      kind: 'date',
-      name: 'visitDate',
-      label: 'Preferred visit date (optional)',
-      placeholder: 'MM-DD-YYYY',
-    },
     { kind: 'text', name: 'companyOrOrganization', label: 'Company / Organization', required: true },
     {
       kind: 'textarea',
@@ -80,6 +74,39 @@ export const contactOrgConfig: SectionConfig = {
       required: true,
       rows: 4,
       span: 2,
+    },
+    // Visit date section
+    {
+      kind: 'radio',
+      name: 'hasConfirmedDate',
+      label: 'Were you given a specific date(s) for your visit?',
+      helpText: 'Optional — submitting this form does not require a confirmed date.',
+      span: 2,
+      options: [
+        { label: 'Yes', value: 'yes' },
+        { label: 'Not yet — please clear me for future scheduling', value: 'no' },
+      ],
+    },
+    {
+      kind: 'date',
+      name: 'visitDate1',
+      label: 'First visit date',
+      placeholder: 'MM-DD-YYYY',
+      showIf: (v) => v.hasConfirmedDate === 'yes',
+    },
+    {
+      kind: 'date',
+      name: 'visitDate2',
+      label: 'Second visit date (optional)',
+      placeholder: 'MM-DD-YYYY',
+      showIf: (v) => v.hasConfirmedDate === 'yes',
+    },
+    {
+      kind: 'date',
+      name: 'visitDate3',
+      label: 'Third visit date (optional)',
+      placeholder: 'MM-DD-YYYY',
+      showIf: (v) => v.hasConfirmedDate === 'yes',
     },
   ],
 };
@@ -199,7 +226,6 @@ export const securityConfig: SectionConfig = {
   columns: 1,
   ctaLabel: 'Submit Application',
   fields: [
-    // Citizenship question FIRST
     {
       kind: 'radio',
       name: 'isUsCitizen',
@@ -249,12 +275,11 @@ export const securityConfig: SectionConfig = {
       required: true,
       placeholder: 'MM-DD-YYYY',
     },
-    // Passport upload shows for non-citizens OR passport ID holders
     {
       name: 'passportScan',
       label: 'Upload Passport Scan',
-      kind: 'file',  
-      required: false, // Validated in backend based on citizenship
+      kind: 'file',
+      required: false,
       accept: '.pdf,.jpg,.jpeg,.png',
       helpText: 'Required for non-US citizens or if using passport as ID. Upload a clear scan of your passport photo page (PDF, JPG, or PNG, max 5MB)',
       showIf: (values: Record<string, unknown>) => {
@@ -325,7 +350,6 @@ export const securityConfig: SectionConfig = {
         { label: 'No', value: 'no' },
       ],
     },
-    
     {
       kind: 'radio',
       name: 'onParole',
@@ -339,13 +363,12 @@ export const securityConfig: SectionConfig = {
     {
       name: 'wardenLetter',
       label: 'Upload clearance request letter to San Quentin',
-      kind: 'file', 
+      kind: 'file',
       required: true,
       accept: '.pdf,.jpg,.jpeg,.png',
       helpText: 'Upload a formal letter requesting visitor clearance addressed to San Quentin (PDF, JPG, or PNG, max 5MB)',
-      showIf: (values: Record<string, unknown>) => values.onParole === 'yes', 
+      showIf: (values: Record<string, unknown>) => values.onParole === 'yes',
     },
-
     {
       kind: 'checkbox',
       name: 'confirmAccuracy',

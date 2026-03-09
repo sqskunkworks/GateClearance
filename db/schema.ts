@@ -57,7 +57,7 @@ export const applications = pgTable("applications", {
 
   // Personal Information
   firstName: text("first_name").notNull(),
-  middleName: text("middle_name"), // Full middle name (optional)
+  middleName: text("middle_name"),
   lastName: text("last_name").notNull(),
   otherNames: text("other_names"),
   dateOfBirth: date("date_of_birth").notNull(),
@@ -68,11 +68,17 @@ export const applications = pgTable("applications", {
   companyOrOrganization: text("company_or_organization").notNull(),
   purposeOfVisit: text("purpose_of_visit"),
 
+  // Visit Dates
+  hasConfirmedDate: text("has_confirmed_date"),   // 'yes' | 'no'
+  visitDate1: date("visit_date_1"),
+  visitDate2: date("visit_date_2"),
+  visitDate3: date("visit_date_3"),
+
   // Authorization
   authorizationType: text("authorization_type").notNull(),
 
   // Citizenship status
-  isUsCitizen: boolean("is_us_citizen"), // nullable
+  isUsCitizen: boolean("is_us_citizen"),
 
   // Government ID
   governmentIdType: governmentIdTypeEnum("government_id_type").notNull(),
