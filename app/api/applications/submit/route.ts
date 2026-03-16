@@ -92,14 +92,14 @@ export async function POST(req: Request) {
 
     const dataForValidation = { applicationId, ...formDataObj };
 
+    // ✅ FIX 1: validateFullApplication now returns { success, errors } not { success, error }
     const validationResult = validateFullApplication(dataForValidation);
 
     if (!validationResult.success) {
-      const allErrors = validationResult.error.issues.map((err) => ({
-        field: err.path.join('.'),
-        message: err.message,
-      }));
-      return NextResponse.json({ error: 'Validation failed', allErrors }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Validation failed', allErrors: validationResult.errors },
+        { status: 400 }
+      );
     }
 
     const governmentIdNumber = getString('governmentIdNumber');
@@ -129,6 +129,12 @@ export async function POST(req: Request) {
       phone_number: phoneNumber,
       company_or_organization: getString('companyOrOrganization'),
       purpose_of_visit: getString('purposeOfVisit') || null,
+
+      // Visit dates
+      has_confirmed_date: getString('hasConfirmedDate') || null,
+      visit_date_1: convertToDBDate(getString('visitDate1')),
+      visit_date_2: convertToDBDate(getString('visitDate2')),
+      visit_date_3: convertToDBDate(getString('visitDate3')),
 
       government_id_type: getString('governmentIdType'),
       government_id_number: governmentIdNumber,
@@ -189,10 +195,11 @@ export async function POST(req: Request) {
     // ============================================
     try {
       const pdfDoc = await loadBlank2311();
-      await fill2311(pdfDoc, pdfRecord);
-      const pdfBytes = await pdfDoc.save();
+      // ✅ FIX 2: fill2311 returns PDFDocument directly, use bytes consistently
+      const filledPdf = await fill2311(pdfDoc, pdfRecord);
+      const bytes = await filledPdf.save();
 
-      if (!pdfBytes || pdfBytes.length === 0) {
+      if (!bytes || bytes.length === 0) {
         throw new Error('PDF generation returned empty buffer');
       }
 
@@ -200,7 +207,8 @@ export async function POST(req: Request) {
       const lastName = getString('lastName').replace(/[^a-zA-Z]/g, '');
       const filename = `${firstName}_${lastName}_2311.pdf`;
 
-      const pdfBuffer = Buffer.from(pdfBytes);
+      // ✅ FIX 3: use bytes not pdfBytes
+      const pdfBuffer = Buffer.from(bytes);
       await uploadPDFToDrive(pdfBuffer, filename);
 
       await supabase.from('documents').insert({
@@ -208,12 +216,12 @@ export async function POST(req: Request) {
         filename,
         url: ' ',
         mime_type: 'application/pdf',
-        size_bytes: pdfBytes.length,
+        size_bytes: bytes.length,
         uploaded_by_user_id: user.id,
       });
 
       console.log('✓ CDCR 2311 PDF uploaded successfully');
-    } catch (pdfError) {
+    } catch (pdfError: unknown) {
       console.error('PDF generation failed:', pdfError);
       throw new Error(`Failed to generate PDF: ${pdfError instanceof Error ? pdfError.message : 'Unknown error'}`);
     }
@@ -232,7 +240,7 @@ export async function POST(req: Request) {
 
         email: getString('email'),
         phoneNumber: getString('phoneNumber'),
-        visitDate: getString('visitDate') || getString('preferredVisitDate'),
+        visitDate: getString('visitDate1') || getString('visitDate') || getString('preferredVisitDate'),
         companyOrOrganization: getString('companyOrOrganization'),
         purposeOfVisit: getString('purposeOfVisit'),
 
@@ -278,7 +286,7 @@ export async function POST(req: Request) {
       });
 
       console.log('✓ Summary PDF uploaded successfully');
-    } catch (summaryError) {
+    } catch (summaryError: unknown) {
       console.error('Summary PDF generation failed:', summaryError);
       console.warn('Continuing despite summary PDF failure');
     }
@@ -325,7 +333,7 @@ export async function POST(req: Request) {
         });
 
         console.log('✓ Passport scan uploaded successfully');
-      } catch (passportError) {
+      } catch (passportError: unknown) {
         return NextResponse.json(
           { error: 'Failed to upload passport scan', details: passportError instanceof Error ? passportError.message : 'Unknown error' },
           { status: 500 }
@@ -370,7 +378,7 @@ export async function POST(req: Request) {
         });
 
         console.log('✓ Clearance letter uploaded successfully');
-      } catch (wardenError) {
+      } catch (wardenError: unknown) {
         console.error('Clearance letter upload failed:', wardenError);
         return NextResponse.json(
           { error: 'Failed to upload clearance letter', details: wardenError instanceof Error ? wardenError.message : 'Unknown error' },
@@ -398,12 +406,11 @@ export async function POST(req: Request) {
         hasConfirmedDate: getString('hasConfirmedDate'),
         visitDate1: getString('visitDate1') || undefined,
         visitDate2: getString('visitDate2') || undefined,
-        visitDate3: getString('visitDate3') || undefined
+        visitDate3: getString('visitDate3') || undefined,
       });
 
       console.log('✓ Email notification sent successfully');
-    } catch (emailError) {
-      // Don't fail the submission if email fails
+    } catch (emailError: unknown) {
       console.error('Email notification failed:', emailError);
     }
 
@@ -413,7 +420,7 @@ export async function POST(req: Request) {
       applicationId,
     });
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Submit failed:', error);
     return NextResponse.json(
       {

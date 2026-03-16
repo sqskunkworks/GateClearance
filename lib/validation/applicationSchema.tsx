@@ -105,59 +105,32 @@ export const contactInfoSchema = z.object({
     .min(10, 'Please provide more detail about your visit purpose (at least 10 characters)')
     .max(1000, 'Purpose of visit is too long (maximum 1000 characters)'),
 
-  // Visit date fields
-  hasConfirmedDate: z
-    .enum(['yes', 'no'])
-    .optional(),
+  hasConfirmedDate: z.enum(['yes', 'no']).optional(),
 
   visitDate1: z
     .string()
     .optional()
-    .refine(
-      (val) => !val || isValidDate(val),
-      'Please enter a valid date in MM-DD-YYYY format'
-    )
-    .refine(
-      (val) => !val || isFutureDate(val),
-      'Visit date must be in the future'
-    ),
+    .refine((val) => !val || isValidDate(val), 'Please enter a valid date in MM-DD-YYYY format')
+    .refine((val) => !val || isFutureDate(val), 'Visit date must be in the future'),
 
   visitDate2: z
     .string()
     .optional()
-    .refine(
-      (val) => !val || isValidDate(val),
-      'Please enter a valid date in MM-DD-YYYY format'
-    )
-    .refine(
-      (val) => !val || isFutureDate(val),
-      'Visit date must be in the future'
-    ),
+    .refine((val) => !val || isValidDate(val), 'Please enter a valid date in MM-DD-YYYY format')
+    .refine((val) => !val || isFutureDate(val), 'Visit date must be in the future'),
 
   visitDate3: z
     .string()
     .optional()
-    .refine(
-      (val) => !val || isValidDate(val),
-      'Please enter a valid date in MM-DD-YYYY format'
-    )
-    .refine(
-      (val) => !val || isFutureDate(val),
-      'Visit date must be in the future'
-    ),
+    .refine((val) => !val || isValidDate(val), 'Please enter a valid date in MM-DD-YYYY format')
+    .refine((val) => !val || isFutureDate(val), 'Visit date must be in the future'),
 })
 .refine(
   (data) => {
-    // If they said yes to confirmed date, require at least visitDate1
-    if (data.hasConfirmedDate === 'yes') {
-      return !!data.visitDate1;
-    }
+    if (data.hasConfirmedDate === 'yes') return !!data.visitDate1;
     return true;
   },
-  {
-    message: 'Please enter at least one visit date',
-    path: ['visitDate1'],
-  }
+  { message: 'Please enter at least one visit date', path: ['visitDate1'] }
 );
 
 // ============================================
@@ -288,7 +261,7 @@ export const securitySchema = z
       return true;
     },
     {
-      message: "Driver's License must be in valid format (e.g., D1234567, 12345678) - only letters, numbers, spaces and dashes allowed",
+      message: "Driver's License must be in valid format (e.g., D1234567, 12345678)",
       path: ['governmentIdNumber'],
     }
   )
@@ -301,7 +274,7 @@ export const securitySchema = z
       return true;
     },
     {
-      message: 'Passport number must be 6-9 characters (only letters and numbers allowed, e.g., 123456789 or N12345678)',
+      message: 'Passport number must be 6-9 characters (only letters and numbers allowed)',
       path: ['governmentIdNumber'],
     }
   )
@@ -314,18 +287,6 @@ export const securitySchema = z
     },
     {
       message: "Please enter the state where your driver's license was issued (e.g., CA, NY, TX)",
-      path: ['idState'],
-    }
-  )
-  .refine(
-    (data) => {
-      if (data.governmentIdType === 'passport' && data.idState) {
-        return false;
-      }
-      return true;
-    },
-    {
-      message: 'State is not required for passports',
       path: ['idState'],
     }
   )
@@ -459,14 +420,11 @@ export const securitySchema = z
 // ============================================
 // FULL APPLICATION SCHEMA
 // ============================================
+// IMPORTANT: Do NOT use .shape spread here — it drops all .refine() validators.
+// Instead, validate each step schema individually and merge the issues.
 export const fullApplicationSchema = z.object({
   applicationId: z.string().uuid(),
-  ...personalInfoSchema.shape,
-  ...contactInfoSchema.shape,
-  ...experienceSchema.shape,
-  ...rulesSchema.shape,
-  ...securitySchema.shape,
-});
+}).and(personalInfoSchema).and(contactInfoSchema).and(experienceSchema).and(rulesSchema).and(securitySchema);
 
 export type FullApplication = z.infer<typeof fullApplicationSchema>;
 export type PersonalInfo = z.infer<typeof personalInfoSchema>;
@@ -491,8 +449,38 @@ export function validateStep(step: number, data: Partial<FullApplication>) {
   }
 }
 
-export function validateFullApplication(data: Partial<FullApplication>) {
-  return fullApplicationSchema.safeParse(data);
+// Validates all steps independently and merges all errors.
+// This ensures every .refine() from every step schema is enforced on final submission.
+export function validateFullApplication(data: unknown): {
+  success: boolean;
+  errors: { field: string; message: string }[];
+} {
+  const allErrors: { field: string; message: string }[] = [];
+
+  const steps = [
+    { schema: personalInfoSchema, name: 'Step 1' },
+    { schema: contactInfoSchema, name: 'Step 2' },
+    { schema: experienceSchema, name: 'Step 3' },
+    { schema: rulesSchema, name: 'Step 4' },
+    { schema: securitySchema, name: 'Step 5' },
+  ];
+
+  for (const { schema } of steps) {
+    const result = schema.safeParse(data);
+    if (!result.success) {
+      result.error.issues.forEach((issue) => {
+        allErrors.push({
+          field: issue.path.join('.') || 'general',
+          message: issue.message,
+        });
+      });
+    }
+  }
+
+  return {
+    success: allErrors.length === 0,
+    errors: allErrors,
+  };
 }
 
 export function getErrorMessages(result: z.ZodError<Record<string, unknown>>): Record<string, string> {
