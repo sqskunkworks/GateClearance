@@ -24,57 +24,55 @@ export default function StepPage() {
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
-  
+
   const currentStep = parseInt(params.step as string);
   const applicationIdFromUrl = searchParams.get('id');
-  
+
   const [applicationId, setApplicationId] = useState<string>('');
   const [formData, setFormData] = useState<FormValues>({});
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
-  const loadDraft = useCallback(
-    async (appId: string) => {
-      try {
-        const response = await fetch(`/api/applications/${appId}`);
-        
-        if (!response.ok) {
-          throw new Error('Failed to load');
-        }
-  
-        const { draft }: { draft: FormValues } = await response.json();
-  
-        const visitDate = sessionStorage.getItem(`app_${appId}_visitDate`);
-        if (visitDate) {
-          draft.visitDate = visitDate;
-          draft.preferredVisitDate = visitDate;
-        }
-        
-        // Re-format driver's license for display if stored without dash
-        if (
-          draft.governmentIdType === 'driver_license' && 
-          draft.governmentIdNumber && 
-          typeof draft.governmentIdNumber === 'string'
-        ) {
-          const cleaned = draft.governmentIdNumber.replace(/-/g, '');
-          if (/^[A-Z]{1,2}\d/.test(cleaned)) {
-            const match = cleaned.match(/^([A-Z]{1,2})(\d+)$/);
-            if (match) {
-              draft.governmentIdNumber = `${match[1]}-${match[2]}`;
-            }
-          }
-        }
-        
-        setFormData(draft);
-        setLoading(false);
-      } catch (error) {
-        console.error('Failed to load draft', error);
-        setLoading(false);
+  const loadDraft = useCallback(async (appId: string) => {
+    try {
+      const response = await fetch(`/api/applications/${appId}`);
+      if (!response.ok) throw new Error('Failed to load');
+
+      const { draft }: { draft: FormValues } = await response.json();
+
+      // Visit dates: DB takes priority, sessionStorage fills in if DB empty
+      // (handles case where user filled in dates but hasn't hit Continue yet)
+      const storedDates = sessionStorage.getItem(`app_${appId}_visitDates`);
+      if (storedDates) {
+        try {
+          const parsed = JSON.parse(storedDates);
+          if (!draft.hasConfirmedDate && parsed.hasConfirmedDate) draft.hasConfirmedDate = parsed.hasConfirmedDate;
+          if (!draft.visitDate1 && parsed.visitDate1) draft.visitDate1 = parsed.visitDate1;
+          if (!draft.visitDate2 && parsed.visitDate2) draft.visitDate2 = parsed.visitDate2;
+          if (!draft.visitDate3 && parsed.visitDate3) draft.visitDate3 = parsed.visitDate3;
+        } catch {}
       }
-    },
-    []
-  );
+
+      if (
+        draft.governmentIdType === 'driver_license' &&
+        draft.governmentIdNumber &&
+        typeof draft.governmentIdNumber === 'string'
+      ) {
+        const cleaned = draft.governmentIdNumber.replace(/-/g, '');
+        if (/^[A-Z]{1,2}\d/.test(cleaned)) {
+          const match = cleaned.match(/^([A-Z]{1,2})(\d+)$/);
+          if (match) draft.governmentIdNumber = `${match[1]}-${match[2]}`;
+        }
+      }
+
+      setFormData(draft);
+      setLoading(false);
+    } catch (error) {
+      console.error('Failed to load draft', error);
+      setLoading(false);
+    }
+  }, []);
 
   const loadFormData = useCallback(async () => {
     try {
@@ -83,7 +81,6 @@ export default function StepPage() {
         await loadDraft(applicationIdFromUrl);
         return;
       }
-
       if (currentStep === 1) {
         const newId = crypto.randomUUID();
         setApplicationId(newId);
@@ -91,7 +88,6 @@ export default function StepPage() {
         setLoading(false);
         return;
       }
-
       router.push('/test-application/1');
       setLoading(false);
     } catch (error) {
@@ -100,42 +96,32 @@ export default function StepPage() {
     }
   }, [applicationIdFromUrl, currentStep, loadDraft, router]);
 
-  useEffect(() => {
-    loadFormData();
-  }, [loadFormData]);
+  useEffect(() => { loadFormData(); }, [loadFormData]);
 
-  // Auto-save draft function (reused for back button)
   const saveDraft = useCallback(async () => {
     if (!applicationId || !formData) return;
-
     try {
-      const endpoint = currentStep === 1 ? 'personal' : 
-                      currentStep === 2 ? 'contact' :
-                      currentStep === 3 ? 'experience' :
-                      currentStep === 4 ? 'rules' : 'security';
+      const endpoint = currentStep === 1 ? 'personal' :
+        currentStep === 2 ? 'contact' :
+        currentStep === 3 ? 'experience' :
+        currentStep === 4 ? 'rules' : 'security';
 
       await fetch(`/api/applications/${applicationId}/${endpoint}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
-
       setLastSaved(new Date());
     } catch (error) {
       console.error('Failed to save draft:', error);
     }
   }, [applicationId, currentStep, formData]);
 
-  // Handle back button
   const handleBack = async () => {
-    // Save current state before navigating
     await saveDraft();
-
     if (currentStep === 1) {
-      // Go back to landing page
       router.push('/');
     } else {
-      // Go to previous step
       router.push(`/test-application/${currentStep - 1}?id=${applicationId}`);
     }
   };
@@ -143,40 +129,33 @@ export default function StepPage() {
   const handleStepComplete = async (payload: FormValues) => {
     const updatedFormData = { ...formData, ...payload };
 
-    // ✅ CLEAN UP CONDITIONAL FIELDS
-    // SSN Method conditional cleanup
-    if (updatedFormData.ssnMethod !== 'call') {
-      delete updatedFormData.ssnVerifiedByPhone;
-    }
-    if (updatedFormData.ssnMethod !== 'direct') {
-      delete updatedFormData.ssnFull;
-      delete updatedFormData.ssnFullConfirm;
-    }
-    if (updatedFormData.ssnMethod !== 'split') {
-      delete updatedFormData.ssnFirstFive;
-      delete updatedFormData.ssnFirstFiveConfirm;
+    // SSN cleanup
+    if (updatedFormData.ssnMethod !== 'call') delete updatedFormData.ssnVerifiedByPhone;
+    if (updatedFormData.ssnMethod !== 'direct') { delete updatedFormData.ssnFull; delete updatedFormData.ssnFullConfirm; }
+    if (updatedFormData.ssnMethod !== 'split') { delete updatedFormData.ssnFirstFive; delete updatedFormData.ssnFirstFiveConfirm; }
+
+    // ID cleanup
+    if (updatedFormData.governmentIdType !== 'driver_license') delete updatedFormData.idState;
+
+    // Passport scan cleanup
+    const isNonCitizen = updatedFormData.isUsCitizen === 'false';
+    const isPassportId = updatedFormData.governmentIdType === 'passport';
+    if (!isNonCitizen && !isPassportId) delete updatedFormData.passportScan;
+
+    // Parole cleanup
+    if (updatedFormData.onParole !== 'yes') delete updatedFormData.wardenLetter;
+
+    // Visit date cleanup
+    if (updatedFormData.hasConfirmedDate !== 'yes') {
+      delete updatedFormData.visitDate1;
+      delete updatedFormData.visitDate2;
+      delete updatedFormData.visitDate3;
     }
 
-    // Government ID Type conditional cleanup
-    if (updatedFormData.governmentIdType !== 'driver_license') {
-      delete updatedFormData.idState;
-    }
-    if (updatedFormData.governmentIdType !== 'passport') {
-      delete updatedFormData.passportScan;
-    }
-
-    // Former Inmate conditional cleanup
-    if (updatedFormData.formerInmate !== 'yes') {
-      delete updatedFormData.wardenLetter;
-    }
-    
-    if (updatedFormData.governmentIdNumber && typeof updatedFormData.governmentIdNumber === 'string') {
+    if (updatedFormData.governmentIdNumber && typeof updatedFormData.governmentIdNumber === 'string')
       updatedFormData.governmentIdNumber = updatedFormData.governmentIdNumber.replace(/-/g, '');
-    }
-    if (updatedFormData.governmentIdNumberConfirm && typeof updatedFormData.governmentIdNumberConfirm === 'string') {
+    if (updatedFormData.governmentIdNumberConfirm && typeof updatedFormData.governmentIdNumberConfirm === 'string')
       updatedFormData.governmentIdNumberConfirm = updatedFormData.governmentIdNumberConfirm.replace(/-/g, '');
-    }
-
 
     setFormData(updatedFormData);
 
@@ -184,34 +163,21 @@ export default function StepPage() {
       if (currentStep === 1) {
         if (applicationIdFromUrl) {
           const response = await fetch(`/api/applications/${applicationId}/personal`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(updatedFormData),
           });
-
           const result = await response.json();
-          if (!response.ok) {
-            throw new Error(result.error);
-          }
-
+          if (!response.ok) throw new Error(result.error);
           setLastSaved(new Date());
           router.push(`/test-application/2?id=${applicationId}`);
           return;
         } else {
           const response = await fetch('/api/applications/create', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              applicationId,
-              ...updatedFormData,
-            }),
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ applicationId, ...updatedFormData }),
           });
-
           const result = await response.json();
-          if (!response.ok) {
-            throw new Error(result.error);
-          }
-
+          if (!response.ok) throw new Error(result.error);
           setLastSaved(new Date());
           window.history.replaceState(null, '', `/test-application/1?id=${applicationId}`);
           router.push(`/test-application/2?id=${applicationId}`);
@@ -220,22 +186,19 @@ export default function StepPage() {
       }
 
       if (currentStep === 2) {
-        const visitDate = updatedFormData.visitDate || updatedFormData.preferredVisitDate;
-        if (typeof visitDate === 'string' && visitDate) {
-          sessionStorage.setItem(`app_${applicationId}_visitDate`, visitDate);
-        }
-        
+        // Save visit dates to sessionStorage as backup until DB confirms
+        sessionStorage.setItem(`app_${applicationId}_visitDates`, JSON.stringify({
+          hasConfirmedDate: updatedFormData.hasConfirmedDate,
+          visitDate1: updatedFormData.visitDate1,
+          visitDate2: updatedFormData.visitDate2,
+          visitDate3: updatedFormData.visitDate3,
+        }));
+
         const response = await fetch(`/api/applications/${applicationId}/contact`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(updatedFormData),
         });
-
-        if (!response.ok) {
-          const result = await response.json();
-          throw new Error(result.error);
-        }
-
+        if (!response.ok) { const result = await response.json(); throw new Error(result.error); }
         setLastSaved(new Date());
         router.push(`/test-application/3?id=${applicationId}`);
         return;
@@ -243,33 +206,21 @@ export default function StepPage() {
 
       if (currentStep === 3) {
         const response = await fetch(`/api/applications/${applicationId}/experience`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(updatedFormData),
         });
-      
-        if (!response.ok) {
-          const result = await response.json();
-          throw new Error(result.error);
-        }
-      
+        if (!response.ok) { const result = await response.json(); throw new Error(result.error); }
         setLastSaved(new Date());
         router.push(`/test-application/4?id=${applicationId}`);
         return;
       }
-      
+
       if (currentStep === 4) {
         const response = await fetch(`/api/applications/${applicationId}/rules`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(updatedFormData),
         });
-      
-        if (!response.ok) {
-          const result = await response.json();
-          throw new Error(result.error);
-        }
-      
+        if (!response.ok) { const result = await response.json(); throw new Error(result.error); }
         setLastSaved(new Date());
         router.push(`/test-application/5?id=${applicationId}`);
         return;
@@ -277,45 +228,32 @@ export default function StepPage() {
 
       if (currentStep === 5) {
         setIsSubmitting(true);
-        
-        // First, save non-file security data via JSON
+
         const securityDataWithoutFiles = { ...updatedFormData };
         delete securityDataWithoutFiles.passportScan;
         delete securityDataWithoutFiles.wardenLetter;
-      
+
         const securityResponse = await fetch(`/api/applications/${applicationId}/security`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(securityDataWithoutFiles),
         });
-      
         if (!securityResponse.ok) {
           const result = await securityResponse.json();
           setIsSubmitting(false);
           throw new Error(result.error);
         }
-      
-        // Use FormData for final submit (includes files)
-        const formData = new FormData();
-        formData.append('applicationId', applicationId);
-        
+
+        const submitFormData = new FormData();
+        submitFormData.append('applicationId', applicationId);
         Object.keys(updatedFormData).forEach((key) => {
           const value = updatedFormData[key];
-          
-          if (value instanceof File) {
-            formData.append(key, value);
-          } else if (value !== null && value !== undefined) {
-            formData.append(key, String(value));
-          }
+          if (value instanceof File) submitFormData.append(key, value);
+          else if (value !== null && value !== undefined) submitFormData.append(key, String(value));
         });
-      
-        const submitResponse = await fetch('/api/applications/submit', {
-          method: 'POST',
-          body: formData,
-        });
-      
+
+        const submitResponse = await fetch('/api/applications/submit', { method: 'POST', body: submitFormData });
         const submitResult = await submitResponse.json();
-      
+
         if (!submitResponse.ok) {
           setIsSubmitting(false);
           if (submitResult.allErrors) {
@@ -328,44 +266,39 @@ export default function StepPage() {
           }
           return;
         }
-      
-        sessionStorage.removeItem(`app_${applicationId}_visitDate`);
+
+        sessionStorage.removeItem(`app_${applicationId}_visitDates`);
         router.push(`/test-application/success?id=${applicationId}`);
       }
     } catch (error) {
-      setIsSubmitting(false); 
+      setIsSubmitting(false);
       alert(`Error: ${error instanceof Error ? error.message : 'Unknown'}`);
     }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#f9f8f6' }}>
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-black"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderBottomColor: '#355F7A' }} />
+          <p className="mt-4 text-sm" style={{ color: '#1C3D5A' }}>Loading...</p>
         </div>
       </div>
     );
   }
 
   const currentConfig = STEP_CONFIGS.find((s) => s.num === currentStep);
-
-  if (!currentConfig) {
-    router.push('/test-application/1');
-    return null;
-  }
+  if (!currentConfig) { router.push('/test-application/1'); return null; }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Loading Overlay for Submit */}
+    <div className="min-h-screen" style={{ backgroundColor: '#f9f8f6' }}>
       {isSubmitting && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
           <div className="bg-white rounded-2xl p-8 shadow-2xl max-w-md mx-4">
             <div className="flex flex-col items-center gap-4">
-              <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-black"></div>
-              <p className="text-xl font-semibold text-center">Submitting your application...</p>
-              <p className="text-sm text-gray-600 text-center">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-4" style={{ borderBottomColor: '#355F7A' }} />
+              <p className="text-xl font-semibold text-center" style={{ color: '#1F2933' }}>Submitting your application...</p>
+              <p className="text-sm text-center" style={{ color: '#1C3D5A' }}>
                 Please wait while we process your information. This may take a moment.
               </p>
             </div>
@@ -373,13 +306,13 @@ export default function StepPage() {
         </div>
       )}
 
-      <div className="bg-white border-b shadow-sm sticky top-0 z-10">
+      <div className="bg-white border-b shadow-sm sticky top-0 z-10" style={{ borderColor: '#E6E1D8' }}>
         <div className="max-w-3xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h1 className="text-2xl font-bold">Gate Clearance Application</h1>
+              <h1 className="text-2xl font-bold" style={{ color: '#1F2933' }}>Gate Clearance Application</h1>
               {lastSaved && (
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs mt-1" style={{ color: '#1C3D5A' }}>
                   Last saved {lastSaved.toLocaleTimeString()}
                 </p>
               )}
@@ -390,27 +323,22 @@ export default function StepPage() {
           <div className="relative">
             <div className="flex items-start justify-between">
               {STEP_CONFIGS.map((step) => (
-                <div
-                  key={step.num}
-                  className="flex flex-col items-center"
-                  style={{ width: `${100 / STEP_CONFIGS.length}%` }}
-                >
+                <div key={step.num} className="flex flex-col items-center" style={{ width: `${100 / STEP_CONFIGS.length}%` }}>
                   <div
-                    className={`flex items-center justify-center w-10 h-10 rounded-full font-semibold mb-2 relative z-10 ${
+                    className="flex items-center justify-center w-10 h-10 rounded-full font-semibold mb-2 relative z-10"
+                    style={
                       step.num < currentStep
-                        ? 'bg-green-500 text-white'
+                        ? { backgroundColor: '#355F7A', color: '#ffffff' }
                         : step.num === currentStep
-                        ? 'bg-black text-white'
-                        : 'bg-gray-200 text-gray-500'
-                    }`}
+                        ? { backgroundColor: '#1C3D5A', color: '#ffffff' }
+                        : { backgroundColor: '#E6E1D8', color: '#1C3D5A' }
+                    }
                   >
                     {step.num < currentStep ? '✓' : step.num}
                   </div>
-
                   <span
-                    className={`text-xs text-center ${
-                      step.num <= currentStep ? 'text-black font-medium' : 'text-gray-500'
-                    }`}
+                    className="text-xs text-center"
+                    style={step.num <= currentStep ? { color: '#1F2933', fontWeight: '500' } : { color: '#9ca3af' }}
                   >
                     {step.label}
                   </span>
@@ -423,9 +351,8 @@ export default function StepPage() {
                 {STEP_CONFIGS.slice(0, -1).map((_, idx) => (
                   <div
                     key={idx}
-                    className={`h-1 flex-1 ${
-                      currentStep > idx + 1 ? 'bg-green-500' : 'bg-gray-200'
-                    }`}
+                    className="h-1 flex-1"
+                    style={{ backgroundColor: currentStep > idx + 1 ? '#355F7A' : '#E6E1D8' }}
                   />
                 ))}
               </div>
