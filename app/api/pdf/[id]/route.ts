@@ -1,8 +1,11 @@
 
+// User-facing PDF download endpoint — authenticates via session, not admin secret
+// Returns the CDCR 2311 PDF for the logged-in user's own application
 
 import { NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
+import { createClient as createSupabaseClient, type SupabaseClient } from '@supabase/supabase-js';
 import { loadBlank2311, fill2311, type AppRecord } from '@/lib/pdf2311';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 export const runtime = 'nodejs';
 
@@ -12,59 +15,50 @@ const getServiceSupabase = (): SupabaseClient => {
   if (!url || !key) {
     throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set');
   }
-  return createClient(url, key, {
+  return createSupabaseClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 };
 
-const ADMIN_SECRET = process.env.ADMIN_DOWNLOAD_SECRET!;
+const formatDate = (dateStr: string | null): string => {
+  if (!dateStr) return '';
+  // Already in MM-DD-YYYY format
+  if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) return dateStr;
+  // Convert from YYYY-MM-DD (DB format) to MM-DD-YYYY
+  const [year, month, day] = dateStr.split('-');
+  return `${month}-${day}-${year}`;
+};
 
-export async function POST(req: Request) {
+export async function GET(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
-  
-    
-    const secret = req.headers.get('x-admin-secret');
- 
+    // Authenticate via user session
+    const authSupabase = await createClient();
+    const { data: { user }, error: authError } = await authSupabase.auth.getUser();
 
-    if (!ADMIN_SECRET || secret !== ADMIN_SECRET) {
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const body = await req.json();
-    const { applicationId, ssn_full } = body;
 
-    if (!applicationId) {
-      return NextResponse.json({ error: 'Missing applicationId' }, { status: 400 });
-    }
+    const { id } = await params;
 
     const supabase = getServiceSupabase();
     const { data, error } = await supabase
       .from('applications')
       .select('*')
-      .eq('id', applicationId)
+      .eq('id', id)
+      .eq('user_id', user.id) // ✅ ensure user can only download their own application
       .single();
 
-    if (error) {
-      return NextResponse.json({ error: error.message, details: error }, { status: 500 });
-    }
-
-    if (!data) {
-
+    if (error || !data) {
       return NextResponse.json({ error: 'Application not found' }, { status: 404 });
     }
 
-
-
-    const formatDate = (dateStr: string | null) => {
-      if (!dateStr) return '';
-      if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) return dateStr;
-      const [year, month, day] = dateStr.split('-');
-      return `${month}-${day}-${year}`;
-    };
-
-
     const record: AppRecord = {
-      // From DB
       first_name: data.first_name,
+      middle_name: data.middle_name,
       last_name: data.last_name,
       other_names: data.other_names,
       date_of_birth: formatDate(data.date_of_birth),
@@ -84,30 +78,17 @@ export async function POST(req: Request) {
       felony_conviction: data.felony_conviction ?? false,
       on_probation_parole: data.on_probation_parole ?? false,
       pending_charges: data.pending_charges ?? false,
-      
-      ssn_full: ssn_full || undefined,
+      // SSN not stored in DB — omitted intentionally for security
+      ssn_full: undefined,
     };
 
-    let pdf;
-    try {
-      pdf = await loadBlank2311();
-   
-      await fill2311(pdf, record);
-
-    } catch (pdfErr) {
-      return NextResponse.json(
-        { 
-          error: 'PDF generation failed', 
-          details: pdfErr instanceof Error ? pdfErr.message : String(pdfErr) 
-        },
-        { status: 500 }
-      );
-    }
-
+    const pdf = await loadBlank2311();
+    await fill2311(pdf, record);
     const bytes = await pdf.save();
-  
-    const filename = `CDCR_2311_${record.first_name}+'_'+${record.last_name}.pdf`;
 
+    const firstName = (data.first_name || '').replace(/[^a-zA-Z]/g, '');
+    const lastName = (data.last_name || '').replace(/[^a-zA-Z]/g, '');
+    const filename = `${firstName}_${lastName}_CDCR_2311.pdf`;
 
     return new NextResponse(Buffer.from(bytes), {
       status: 200,
@@ -118,12 +99,11 @@ export async function POST(req: Request) {
       },
     });
 
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Failed to generate PDF';
-    return NextResponse.json({ 
-      error: message,
-      type: typeof err,
-      details: err instanceof Error ? { message: err.message, stack: err.stack } : String(err)
-    }, { status: 500 });
+  } catch (err) {
+    console.error('PDF download failed:', err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Failed to generate PDF' },
+      { status: 500 }
+    );
   }
 }

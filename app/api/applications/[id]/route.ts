@@ -50,38 +50,42 @@ export async function GET(
 
     const isNewDraft = data.status === 'draft' && !data.submitted_at;
 
-    // Transform to form format, filtering out placeholder values
     const formData: Record<string, unknown> = {
+      // Step 1: Personal
       firstName: data.first_name || '',
-      middleName: data.middle_name || '', // ✅ NEW: Middle name
+      middleName: data.middle_name || '',
       lastName: data.last_name || '',
       otherNames: data.other_names || '',
       dateOfBirth: convertToFormDate(data.date_of_birth),
       gender: data.gender || '',
 
-      // Only include real contact data (filter placeholders)
+      // Step 2: Contact (filter placeholders)
       email: isPlaceholder(data.email, DRAFT_PLACEHOLDERS.EMAIL) ? '' : data.email,
       phoneNumber: isPlaceholder(data.phone_number, DRAFT_PLACEHOLDERS.PHONE) ? '' : data.phone_number,
       companyOrOrganization: isPlaceholder(data.company_or_organization, DRAFT_PLACEHOLDERS.COMPANY) ? '' : data.company_or_organization,
       purposeOfVisit: data.purpose_of_visit || '',
 
-      // Experience data from JSONB
+      // Visit dates
+      hasConfirmedDate: data.has_confirmed_date || '',
+      visitDate1: convertToFormDate(data.visit_date_1),
+      visitDate2: convertToFormDate(data.visit_date_2),
+      visitDate3: convertToFormDate(data.visit_date_3),
+
+      // Step 3: Experience (from JSONB)
       ...(data.impact_responses || {}),
 
-      // Rules data from JSONB
+      // Step 4: Rules (from JSONB)
       ...(data.rules_quiz_answers || {}),
 
-      // Only include real security data (filter placeholders)
+      // Step 5: Security (filter placeholders)
       governmentIdType: isPlaceholder(data.government_id_number, DRAFT_PLACEHOLDERS.GOV_ID_NUMBER) ? '' : data.government_id_type,
       governmentIdNumber: isPlaceholder(data.government_id_number, DRAFT_PLACEHOLDERS.GOV_ID_NUMBER) ? '' : data.government_id_number,
       governmentIdNumberConfirm: isPlaceholder(data.government_id_number, DRAFT_PLACEHOLDERS.GOV_ID_NUMBER) ? '' : data.government_id_number,
       idState: data.id_state || '',
       idExpiration: convertToFormDate(data.id_expiration),
       digitalSignature: data.digital_signature || '',
-      
-      // ✅ CRITICAL FIX: Return citizenship status (was missing!)
       isUsCitizen: data.is_us_citizen === null ? '' : (data.is_us_citizen ? 'true' : 'false'),
-      
+
       // Background questions (only for submitted applications)
       formerInmate: isNewDraft ? '' : (data.former_inmate ? 'yes' : 'no'),
       onParole: isNewDraft ? '' : (data.on_probation_parole ? 'yes' : 'no'),
@@ -91,7 +95,6 @@ export async function GET(
 
   } catch (error) {
     console.error('Failed to fetch draft', error);
-
     return NextResponse.json(
       { error: 'Failed to fetch draft' },
       { status: 500 }

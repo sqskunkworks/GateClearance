@@ -42,16 +42,9 @@ export const applicationTypeEnum = pgEnum("application_type", [
 
 /* ========= Tables ========= */
 export const applications = pgTable("applications", {
-  // Primary Key
   id: uuid("id").defaultRandom().primaryKey(),
-
-  // Auth / User
   userId: text("user_id").notNull(),
-
-  // Contact
   email: text("email").notNull(),
-
-  // Application Type
   applicationType: applicationTypeEnum("application_type").notNull().default("short_gc"),
 
   // Personal Information
@@ -67,7 +60,7 @@ export const applications = pgTable("applications", {
   companyOrOrganization: text("company_or_organization").notNull(),
   purposeOfVisit: text("purpose_of_visit"),
 
-  // Visit Dates (short_gc)
+  // Visit Dates ('yes' | 'no')
   hasConfirmedDate: text("has_confirmed_date"),
   visitDate1: date("visit_date_1"),
   visitDate2: date("visit_date_2"),
@@ -75,8 +68,6 @@ export const applications = pgTable("applications", {
 
   // Authorization
   authorizationType: text("authorization_type").notNull(),
-
-  // Citizenship status
   isUsCitizen: boolean("is_us_citizen"),
 
   // Government ID
@@ -84,11 +75,9 @@ export const applications = pgTable("applications", {
   governmentIdNumber: text("government_id_number").notNull(),
   idState: text("id_state"),
   idExpiration: date("id_expiration"),
-
-  // SSN verification
   ssnVerifiedByPhone: boolean("ssn_verified_by_phone"),
 
-  // Background Questions (short_gc booleans)
+  // Background Questions
   visitedInmate: boolean("visited_inmate").notNull().default(false),
   formerInmate: boolean("former_inmate").notNull().default(false),
   restrictedAccess: boolean("restricted_access").notNull().default(false),
@@ -96,33 +85,22 @@ export const applications = pgTable("applications", {
   onProbationParole: boolean("on_probation_parole").notNull().default(false),
   pendingCharges: boolean("pending_charges").notNull().default(false),
 
-  // Digital Signature
   digitalSignature: text("digital_signature"),
-
-  // Status
   status: appStatusEnum("status").notNull().default("draft"),
   submittedAt: timestamp("submitted_at", { withTimezone: true }),
-
-  // Timestamps
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-
-  // JSONB columns
   impactResponses: jsonb("impact_responses"),
   rulesQuizAnswers: jsonb("rules_quiz_answers"),
 
   // ─────────────────────────────────────────────────────────────────
   // ANNUAL GC ONLY — all nullable, ignored by short_gc flow
   // ─────────────────────────────────────────────────────────────────
-
-  // Cover sheet
   isRenewal: boolean("is_renewal"),
   programName: text("program_name"),
-  ppFacilitator: text("pp_facilitator"),        // auto-filled as Kyle later
-  birthday: date("birthday"),                    // cover sheet birthday field
-
-  // Personal details (CDCR 966 Section I)
-  middleInitial: text("middle_initial"),         // single letter, separate from middleName
+  ppFacilitator: text("pp_facilitator"),
+  birthday: date("birthday"),
+  middleInitial: text("middle_initial"),
   cellNumber: text("cell_number"),
   addressStreet: text("address_street"),
   addressApt: text("address_apt"),
@@ -136,8 +114,6 @@ export const applications = pgTable("applications", {
   occupation: text("occupation"),
   specialSkills: text("special_skills"),
   organizationAddress: text("organization_address"),
-
-  // Background questions (CDCR 966 Q1–Q7)
   q1LiveScan: boolean("q1_live_scan"),
   q1LiveScanDetails: text("q1_live_scan_details"),
   q2OtherCdcr: boolean("q2_other_cdcr"),
@@ -147,13 +123,11 @@ export const applications = pgTable("applications", {
   q4RelatedToInmate: boolean("q4_related_to_inmate"),
   q4RelatedDetails: text("q4_related_details"),
   q5ArrestedConvicted: boolean("q5_arrested_convicted"),
-  criminalHistory: jsonb("criminal_history"),    // array of offense rows
+  criminalHistory: jsonb("criminal_history"),
   q6OnParole: boolean("q6_on_parole"),
   q6ParoleDetails: text("q6_parole_details"),
   q7Discharged: boolean("q7_discharged"),
   q7DischargeDetails: text("q7_discharge_details"),
-
-  // Emergency contacts (CDCR 894)
   ssnLast4: text("ssn_last4"),
   ec1Name: text("ec1_name"),
   ec1Relationship: text("ec1_relationship"),
@@ -174,8 +148,6 @@ export const applications = pgTable("applications", {
   medicalFacility: text("medical_facility"),
   specialConditions: text("special_conditions"),
   specialInstructions: text("special_instructions"),
-
-  // Acknowledgment (annual gc specific)
   certificationAgreement: boolean("certification_agreement"),
   reasonableAccommodationAck: boolean("reasonable_accommodation_ack"),
 });
@@ -183,7 +155,6 @@ export const applications = pgTable("applications", {
 export type Application = typeof applications.$inferSelect;
 export type NewApplication = typeof applications.$inferInsert;
 
-// Documents table — shared between short_gc and annual_gc
 export const documents = pgTable("documents", {
   id: uuid("id").defaultRandom().primaryKey(),
   applicationId: uuid("application_id")

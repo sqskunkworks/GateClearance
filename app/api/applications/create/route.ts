@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseClient, type SupabaseClient } from '@supabase/supabase-js';
 import { DRAFT_PLACEHOLDERS } from '@/lib/constants';
-import { applicationTypeSchema } from '@/lib/validation/applicationSchema'; // ✅ ADD THIS
 
 export const runtime = 'nodejs';
 
@@ -23,6 +22,9 @@ const convertToDBDate = (formDate: string): string => {
   return `${year}-${month}-${day}`;
 };
 
+const VALID_APPLICATION_TYPES = ['short_gc', 'annual_gc', 'brown_card'] as const;
+type ApplicationType = typeof VALID_APPLICATION_TYPES[number];
+
 export async function POST(req: Request) {
   try {
     const authSupabase = await createClient();
@@ -33,28 +35,10 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { applicationId, applicationType = 'short_gc', ...formData } = body; // ✅ EXTRACT applicationType
-
-    if (!applicationId) {
-      return NextResponse.json({ error: 'Application ID is required' }, { status: 400 });
-    }
-
-    // ✅ VALIDATE applicationType
-    const typeValidation = applicationTypeSchema.safeParse(applicationType);
-    if (!typeValidation.success) {
-      return NextResponse.json(
-        { 
-          error: 'Invalid application type',
-          details: 'Must be one of: short_gc, annual_gc, brown_card',
-          received: applicationType
-        },
-        { status: 400 }
-      );
-    }
+    const { applicationId, ...formData } = body;
 
     const requiredFields = ['firstName', 'lastName', 'dateOfBirth', 'gender'];
     const missing = requiredFields.filter(f => !formData[f]);
-
     if (missing.length > 0) {
       return NextResponse.json(
         { error: `Missing required fields: ${missing.join(', ')}` },
@@ -62,32 +46,40 @@ export async function POST(req: Request) {
       );
     }
 
+    // ✅ Read application_type from body, validate it, fall back to short_gc
+    const rawType = formData.applicationType ?? 'short_gc';
+    const applicationType: ApplicationType = VALID_APPLICATION_TYPES.includes(rawType as ApplicationType)
+      ? (rawType as ApplicationType)
+      : 'short_gc';
+
     const draftData = {
       id: applicationId,
       user_id: user.id,
-      application_type: typeValidation.data, // ✅ WRITE applicationType
-      
+
+      // ✅ Set application_type from the URL/body — never hardcoded
+      application_type: applicationType,
+
       // Step 1: Personal info (real data)
       first_name: formData.firstName,
-      middle_name: formData.middleName || null, // ✅ NEW: Middle name
+      middle_name: formData.middleName || null,
       last_name: formData.lastName,
       other_names: formData.otherNames || null,
       date_of_birth: convertToDBDate(formData.dateOfBirth),
       gender: formData.gender,
-      
-      // Step 2: Contact (placeholders - updated via PATCH in Step 2)
+
+      // Step 2: Contact (placeholders — replaced on step 2 PATCH)
       email: DRAFT_PLACEHOLDERS.EMAIL,
       phone_number: DRAFT_PLACEHOLDERS.PHONE,
       company_or_organization: DRAFT_PLACEHOLDERS.COMPANY,
       purpose_of_visit: null,
-      
-      // Step 5: Security (placeholders - replaced on final submit)
+
+      // Step 5: Security (placeholders — replaced on final submit)
       government_id_type: DRAFT_PLACEHOLDERS.GOV_ID_TYPE,
       government_id_number: DRAFT_PLACEHOLDERS.GOV_ID_NUMBER,
-      
+
       authorization_type: 'gate_clearance',
       status: 'draft',
-      
+
       visited_inmate: false,
       former_inmate: false,
       restricted_access: false,
@@ -113,7 +105,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       applicationId: data.id,
-      applicationType: data.application_type, // ✅ RETURN applicationType
+      applicationType,
       message: 'Draft created successfully',
     });
 

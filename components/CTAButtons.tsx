@@ -20,8 +20,8 @@ export function CTAButtons({ isLoggedIn }: { isLoggedIn: boolean }) {
             href="/annual-application/1?type=annual_gc"
             className="inline-block px-8 py-4 rounded-lg font-semibold transition-colors text-center"
             style={{ backgroundColor: '#ffffff', color: '#355F7A', border: '2px solid #355F7A' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = '#E6E1D8'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = '#355F7A'; (e.currentTarget as HTMLAnchorElement).style.color = '#ffffff'; }}
+            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = '#E6E1D8'; (e.currentTarget as HTMLAnchorElement).style.color = '#1C3D5A'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = '#ffffff'; (e.currentTarget as HTMLAnchorElement).style.color = '#355F7A'; }}
           >
             Annual Gate Clearance
           </Link>
