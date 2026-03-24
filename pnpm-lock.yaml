@@ -90,9 +90,6 @@ importers:
       eslint-config-next:
         specifier: 16.1.0
         version: 16.1.0(@typescript-eslint/parser@8.50.0(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3)
-      nodemailer:
-        specifier: ^8.0.1
-        version: 8.0.1
       pnpm:
         specifier: ^10.30.3
         version: 10.30.3
