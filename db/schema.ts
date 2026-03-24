@@ -99,6 +99,7 @@ export const applications = pgTable("applications", {
   isRenewal: boolean("is_renewal"),
   programName: text("program_name"),
   ppFacilitator: text("pp_facilitator"),
+  ppName: text("pp_name"),
   birthday: date("birthday"),
   middleInitial: text("middle_initial"),
   cellNumber: text("cell_number"),

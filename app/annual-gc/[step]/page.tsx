@@ -1,115 +1,310 @@
 'use client';
 
-import { useRouter, useParams } from 'next/navigation';
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
+import { SectionForm, type FormValues } from '@/components/SectionForm';
 import { LogoutButton } from '@/components/LogoutButton';
+import {
+  annualCoverConfig,
+  annualPersonalConfig,
+  annualBackgroundConfig,
+  annualEmergencyConfig,
+  annualAcknowledgmentConfig,
+} from '@/lib/annualGCStepConfigs';
 
-export default function AnnualGCPage() {
+const STEP_CONFIGS = [
+  { num: 1, label: 'Cover', config: annualCoverConfig },
+  { num: 2, label: 'Personal', config: annualPersonalConfig },
+  { num: 3, label: 'Background', config: annualBackgroundConfig },
+  { num: 4, label: 'Emergency', config: annualEmergencyConfig },
+  { num: 5, label: 'Sign', config: annualAcknowledgmentConfig },
+];
+
+export default function AnnualGCStepPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
+
   const currentStep = parseInt(params.step as string);
+  const applicationIdFromUrl = searchParams.get('id');
+
+  const [applicationId, setApplicationId] = useState<string>('');
+  const [formData, setFormData] = useState<FormValues>({});
+  const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+
+  const loadDraft = useCallback(async (appId: string) => {
+    try {
+      const response = await fetch(`/api/applications/${appId}`);
+      if (!response.ok) throw new Error('Failed to load');
+      const { draft }: { draft: FormValues } = await response.json();
+
+      // Map DB fields back to annual GC form field names where they differ
+      if (draft.phoneNumber && !draft.contactNumber) draft.contactNumber = draft.phoneNumber;
+      if (draft.companyOrOrganization && !draft.organizationName) draft.organizationName = draft.companyOrOrganization as string;
+
+      setFormData(draft);
+      setLoading(false);
+    } catch (error) {
+      console.error('Failed to load draft', error);
+      setLoading(false);
+    }
+  }, []);
+
+  const loadFormData = useCallback(async () => {
+    try {
+      if (applicationIdFromUrl) {
+        setApplicationId(applicationIdFromUrl);
+        await loadDraft(applicationIdFromUrl);
+        return;
+      }
+      if (currentStep === 1) {
+        const newId = crypto.randomUUID();
+        setApplicationId(newId);
+        setFormData({});
+        setLoading(false);
+        return;
+      }
+      router.push('/annual-gc/1');
+      setLoading(false);
+    } catch (error) {
+      console.error('Failed to load form data', error);
+      setLoading(false);
+    }
+  }, [applicationIdFromUrl, currentStep, loadDraft, router]);
+
+  useEffect(() => { loadFormData(); }, [loadFormData]);
+
+  const saveDraft = useCallback(async () => {
+    if (!applicationId || !formData) return;
+    try {
+      const endpointMap: Record<number, string> = {
+        1: 'cover',
+        2: 'personal',
+        3: 'background',
+        4: 'emergency',
+      };
+      const endpoint = endpointMap[currentStep];
+      if (!endpoint) return; // step 5 is submit only
+
+      await fetch(`/api/applications/${applicationId}/${endpoint}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+      setLastSaved(new Date());
+    } catch (error) {
+      console.error('Failed to save draft:', error);
+    }
+  }, [applicationId, currentStep, formData]);
+
+  const handleBack = async () => {
+    await saveDraft();
+    if (currentStep === 1) router.push('/');
+    else router.push(`/annual-gc/${currentStep - 1}?id=${applicationId}`);
+  };
+
+  const handleStepComplete = async (payload: FormValues) => {
+    const updatedFormData = { ...formData, ...payload };
+    setFormData(updatedFormData);
+
+    try {
+      // ── Step 1: Cover sheet ──────────────────────────────────
+      if (currentStep === 1) {
+        if (applicationIdFromUrl) {
+          // Updating existing draft
+          const response = await fetch(`/api/applications/${applicationId}/cover`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updatedFormData),
+          });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error);
+        } else {
+          // Creating new draft — reuse existing create route with annual_gc type
+          const response = await fetch('/api/applications/create', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              applicationId,
+              applicationType: 'annual_gc',
+              // Map cover fields to the create route's expected fields
+              firstName: updatedFormData.ppName,   // temporary — overwritten in step 2
+              lastName: 'PENDING',                  // placeholder until step 2
+              dateOfBirth: updatedFormData.birthday,
+              gender: 'prefer_not_to_say',          // placeholder until step 2
+              ...updatedFormData,
+            }),
+          });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error);
+
+          // Also save cover-specific fields
+          await fetch(`/api/applications/${applicationId}/cover`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updatedFormData),
+          });
+
+          window.history.replaceState(null, '', `/annual-gc/1?id=${applicationId}`);
+        }
+        setLastSaved(new Date());
+        router.push(`/annual-gc/2?id=${applicationId}`);
+        return;
+      }
+
+      // ── Step 2: Personal details ─────────────────────────────
+  // Step 2 — was using shared personal route, now uses annual-specific one
+if (currentStep === 2) {
+  const response = await fetch(`/api/applications/${applicationId}/annual-personal`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updatedFormData),
+  });
+  if (!response.ok) { const r = await response.json(); throw new Error(r.error); }
+  setLastSaved(new Date());
+  router.push(`/annual-gc/3?id=${applicationId}`);
+  return;
+}
+
+      // ── Step 3: Background questions ─────────────────────────
+      if (currentStep === 3) {
+        const response = await fetch(`/api/applications/${applicationId}/background`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedFormData),
+        });
+        if (!response.ok) { const r = await response.json(); throw new Error(r.error); }
+        setLastSaved(new Date());
+        router.push(`/annual-gc/4?id=${applicationId}`);
+        return;
+      }
+
+      // ── Step 4: Emergency contacts ───────────────────────────
+      if (currentStep === 4) {
+        const response = await fetch(`/api/applications/${applicationId}/emergency`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedFormData),
+        });
+        if (!response.ok) { const r = await response.json(); throw new Error(r.error); }
+        setLastSaved(new Date());
+        router.push(`/annual-gc/5?id=${applicationId}`);
+        return;
+      }
+
+      // ── Step 5: Acknowledgment + Submit ──────────────────────
+      if (currentStep === 5) {
+        console.log('Form data at submit:', JSON.stringify(
+          Object.fromEntries(
+            Object.entries(updatedFormData).filter(([, v]) => !(v instanceof File))
+          ), null, 2
+        ));
+        setIsSubmitting(true);
+
+        const submitFormData = new FormData();
+        submitFormData.append('applicationId', applicationId);
+        Object.keys(updatedFormData).forEach((key) => {
+          const value = updatedFormData[key];
+          if (value instanceof File) submitFormData.append(key, value);
+          else if (value !== null && value !== undefined) submitFormData.append(key, String(value));
+        });
+
+        const submitResponse = await fetch('/api/applications/annual-gc/submit', {
+          method: 'POST', body: submitFormData,
+        });
+        const submitResult = await submitResponse.json();
+
+        if (!submitResponse.ok) {
+          setIsSubmitting(false);
+          if (submitResult.allErrors) {
+            alert(`Validation failed:\n\n${submitResult.allErrors.map((e: { field: string; message: string }) => `${e.field}: ${e.message}`).join('\n')}`);
+          } else alert(`Error: ${submitResult.error}`);
+          return;
+        }
+
+        router.push(`/annual-gc/success?id=${applicationId}`);
+      }
+    } catch (error) {
+      setIsSubmitting(false);
+      alert(`Error: ${error instanceof Error ? error.message : 'Unknown'}`);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#f9f8f6' }}>
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderBottomColor: '#355F7A' }} />
+          <p className="mt-4 text-sm" style={{ color: '#1C3D5A' }}>Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const currentConfig = STEP_CONFIGS.find((s) => s.num === currentStep);
+  if (!currentConfig) { router.push('/annual-gc/1'); return null; }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b shadow-sm sticky top-0 z-10">
+    <div className="min-h-screen" style={{ backgroundColor: '#f9f8f6' }}>
+      {isSubmitting && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-white rounded-2xl p-8 shadow-2xl max-w-md mx-4">
+            <div className="flex flex-col items-center gap-4">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-4" style={{ borderBottomColor: '#355F7A' }} />
+              <p className="text-xl font-semibold text-center" style={{ color: '#1F2933' }}>Submitting your application...</p>
+              <p className="text-sm text-center" style={{ color: '#1C3D5A' }}>Please wait while we process your information.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header + Step Progress */}
+      <div className="bg-white border-b shadow-sm sticky top-0 z-10" style={{ borderColor: '#E6E1D8' }}>
         <div className="max-w-3xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h1 className="text-2xl font-bold">Annual Gate Clearance Application</h1>
-              <p className="text-sm text-gray-500 mt-1">Extended clearance for multiple visits</p>
+              <h1 className="text-2xl font-bold" style={{ color: '#1F2933' }}>Annual Gate Clearance Application</h1>
+              {lastSaved && <p className="text-xs mt-1" style={{ color: '#1C3D5A' }}>Last saved {lastSaved.toLocaleTimeString()}</p>}
             </div>
             <LogoutButton />
           </div>
 
-          {/* Progress Bar */}
-          <div className="flex items-center justify-between">
-            {[1, 2, 3, 4, 5, 6].map((step) => (
-              <div
-                key={step}
-                className="flex flex-col items-center"
-                style={{ width: `${100 / 6}%` }}
-              >
-                <div
-                  className={`flex items-center justify-center w-10 h-10 rounded-full font-semibold mb-2 ${
-                    step === currentStep
-                      ? 'bg-green-500 text-white'
-                      : 'bg-gray-200 text-gray-500'
-                  }`}
-                >
-                  {step}
+          <div className="relative">
+            <div className="flex items-start justify-between">
+              {STEP_CONFIGS.map((step) => (
+                <div key={step.num} className="flex flex-col items-center" style={{ width: `${100 / STEP_CONFIGS.length}%` }}>
+                  <div
+                    className="flex items-center justify-center w-10 h-10 rounded-full font-semibold mb-2 relative z-10"
+                    style={
+                      step.num < currentStep
+                        ? { backgroundColor: '#355F7A', color: '#ffffff' }
+                        : step.num === currentStep
+                        ? { backgroundColor: '#1C3D5A', color: '#ffffff' }
+                        : { backgroundColor: '#E6E1D8', color: '#1C3D5A' }
+                    }
+                  >
+                    {step.num < currentStep ? '✓' : step.num}
+                  </div>
+                  <span className="text-xs text-center" style={step.num <= currentStep ? { color: '#1F2933', fontWeight: '500' } : { color: '#9ca3af' }}>
+                    {step.label}
+                  </span>
                 </div>
-                <span className="text-xs text-gray-500">Step {step}</span>
+              ))}
+            </div>
+            <div className="absolute top-5 left-0 right-0 flex items-center px-[10%]">
+              <div className="flex-1 flex items-center gap-0">
+                {STEP_CONFIGS.slice(0, -1).map((_, idx) => (
+                  <div key={idx} className="h-1 flex-1" style={{ backgroundColor: currentStep > idx + 1 ? '#355F7A' : '#E6E1D8' }} />
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="max-w-3xl mx-auto px-4 py-12">
-        <div className="bg-white rounded-lg shadow-md p-8">
-          <div className="text-center">
-            <div className="inline-block bg-green-100 text-green-700 px-4 py-2 rounded-full mb-6">
-              🚧 Under Construction
-            </div>
-            
-            <h2 className="text-3xl font-bold mb-4">
-              Annual Gate Clearance - Step {currentStep}
-            </h2>
-            
-            <p className="text-gray-600 mb-8">
-              This is a placeholder for the Annual Gate Clearance application flow.
-              This form will include additional fields and requirements for annual clearance.
-            </p>
-
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
-              <h3 className="font-semibold mb-2">Coming Soon:</h3>
-              <ul className="text-sm text-gray-700 text-left space-y-2">
-                <li>• Extended personal information</li>
-                <li>• Detailed organization verification</li>
-                <li>• Visit frequency and schedule</li>
-                <li>• Enhanced background checks</li>
-                <li>• Multiple reference contacts</li>
-                <li>• Annual agreement and terms</li>
-              </ul>
-            </div>
-
-            {/* Navigation Buttons */}
-            <div className="flex gap-4 justify-center">
-              <button
-                onClick={() => {
-                  if (currentStep === 1) {
-                    router.push('/');
-                  } else {
-                    router.push(`/annual-gc/${currentStep - 1}`);
-                  }
-                }}
-                className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
-              >
-                {currentStep === 1 ? 'Back to Home' : 'Previous Step'}
-              </button>
-
-              {currentStep < 6 && (
-                <button
-                  onClick={() => router.push(`/annual-gc/${currentStep + 1}`)}
-                  className="px-6 py-3 bg-black text-white rounded-lg font-semibold hover:bg-gray-800 transition-colors"
-                >
-                  Next Step (Demo)
-                </button>
-              )}
-
-              {currentStep === 6 && (
-                <button
-                  onClick={() => router.push('/')}
-                  className="px-6 py-3 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600 transition-colors"
-                >
-                  Complete (Demo)
-                </button>
-              )}
             </div>
           </div>
         </div>
       </div>
+
+      <SectionForm
+        config={currentConfig.config}
+        initialValues={formData}
+        onSubmit={handleStepComplete}
+        onBack={handleBack}
+        currentStep={currentStep}
+      />
     </div>
   );
 }
