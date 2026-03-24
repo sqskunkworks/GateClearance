@@ -420,8 +420,7 @@ export const securitySchema = z
 // ============================================
 // FULL APPLICATION SCHEMA
 // ============================================
-// IMPORTANT: Do NOT use .shape spread here — it drops all .refine() validators.
-// Instead, validate each step schema individually and merge the issues.
+
 export const fullApplicationSchema = z.object({
   applicationId: z.string().uuid(),
 }).and(personalInfoSchema).and(contactInfoSchema).and(experienceSchema).and(rulesSchema).and(securitySchema);
@@ -449,13 +448,26 @@ export function validateStep(step: number, data: Partial<FullApplication>) {
   }
 }
 
-// Validates all steps independently and merges all errors.
-// This ensures every .refine() from every step schema is enforced on final submission.
+// Validates applicationId first, then all step schemas independently.
+// This ensures every .refine() from every step schema is enforced on final submission,
+// and that submission cannot proceed without a valid UUID.
 export function validateFullApplication(data: unknown): {
   success: boolean;
   errors: { field: string; message: string }[];
 } {
   const allErrors: { field: string; message: string }[] = [];
+
+  // ✅ PR fix: validate applicationId as a UUID before proceeding
+  // Without this, submit could proceed with missing/invalid ID and fail later in DB/PDF steps
+  const idResult = z.uuid().safeParse(
+    (data as Record<string, unknown>)?.applicationId
+  );
+  if (!idResult.success) {
+    return {
+      success: false,
+      errors: [{ field: 'applicationId', message: 'A valid application ID is required' }],
+    };
+  }
 
   const steps = [
     { schema: personalInfoSchema, name: 'Step 1' },
