@@ -500,8 +500,37 @@ export function validateStep(step: number, data: Partial<FullApplication>) {
   }
 }
 
-export function validateFullApplication(data: Partial<FullApplication>) {
-  return fullApplicationSchema.safeParse(data);
+
+export function validateFullApplication(data: unknown): {
+  success: boolean;
+  errors: { field: string; message: string }[];
+} {
+  const allErrors: { field: string; message: string }[] = [];
+
+  const steps = [
+    personalInfoSchema,
+    contactInfoSchema,
+    experienceSchema,
+    rulesSchema,
+    securitySchema,
+  ];
+
+  for (const schema of steps) {
+    const result = schema.safeParse(data);
+    if (!result.success) {
+      result.error.issues.forEach((issue) => {
+        allErrors.push({
+          field: issue.path.join('.') || 'general',
+          message: issue.message,
+        });
+      });
+    }
+  }
+
+  return {
+    success: allErrors.length === 0,
+    errors: allErrors,
+  };
 }
 
 export function getErrorMessages(result: z.ZodError<Record<string, unknown>>): Record<string, string> {
