@@ -1,4 +1,4 @@
-// app/api/pdf/route.ts
+
 
 import { NextResponse } from 'next/server';
 import { loadBlank2311, fill2311, type AppRecord } from '@/lib/pdf2311';
@@ -106,7 +106,7 @@ export async function POST(req: Request) {
 
     const bytes = await pdf.save();
   
-    const filename = `CDCR_2311_${applicationId}.pdf`;
+    const filename = `CDCR_2311_${record.first_name}+'_'+${record.last_name}.pdf`;
 
 
     return new NextResponse(Buffer.from(bytes), {

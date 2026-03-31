@@ -27,7 +27,10 @@ export function LogoutButton() {
     <button
       onClick={handleLogout}
       disabled={loading}
-      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+      className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+      style={{ color: '#1C3D5A', border: '1px solid #E6E1D8' }}
+      onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#E6E1D8'; }}
+      onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
     >
       <LogOut className="w-4 h-4" />
       {loading ? 'Logging out...' : 'Logout'}

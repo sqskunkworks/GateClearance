@@ -1,0 +1,71 @@
+name: Keep Supabase Database Alive
+on:
+  schedule:
+    - cron: '0 3 */2 * *'
+  workflow_dispatch:
+jobs:
+  ping-database:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Ping Supabase Database
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          echo "Starting health check..."
+          
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          
+          # Operation 1: INSERT into health_check
+          echo "Operation 1: INSERT"
+          HTTP_CODE=$(curl -s -o /tmp/response1.txt -w "%{http_code}" \
+            -X POST \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=representation" \
+            -d "{\"created_at\": \"${TIMESTAMP}\"}" \
+            "${SUPABASE_URL}/rest/v1/health_check")
+          echo "INSERT Response: $HTTP_CODE"
+          
+          # Operation 2: SELECT from health_check
+          echo "Operation 2: SELECT"
+          HTTP_CODE2=$(curl -s -o /tmp/response2.txt -w "%{http_code}" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            "${SUPABASE_URL}/rest/v1/health_check?select=*")
+          echo "SELECT Response: $HTTP_CODE2"
+          
+          # Operation 3: COUNT rows in health_check
+          echo "Operation 3: COUNT"
+          HTTP_CODE3=$(curl -s -o /tmp/response3.txt -w "%{http_code}" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            -H "Prefer: count=exact" \
+            "${SUPABASE_URL}/rest/v1/health_check?select=count")
+          echo "COUNT Response: $HTTP_CODE3"
+          
+          # Operation 4: Second INSERT into health_check
+          echo "Operation 4: Second INSERT"
+          HTTP_CODE4=$(curl -s -o /tmp/response4.txt -w "%{http_code}" \
+            -X POST \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=representation" \
+            -d "{\"created_at\": \"${TIMESTAMP}\"}" \
+            "${SUPABASE_URL}/rest/v1/health_check")
+          echo "Second INSERT Response: $HTTP_CODE4"
+          
+          # REMOVED: Operation 5 was querying the applications table with the anon key.
+          # That table is protected by RLS and contains PII — it should never be queried
+          # from a CI job using the anon key. health_check pings are sufficient to keep
+          # the database active.
+          
+          echo ""
+          echo "✓ Completed 4 health_check operations at: ${TIMESTAMP}"
+
+      - name: Report Status
+        if: always()
+        run: echo "Ping completed at $(date)"

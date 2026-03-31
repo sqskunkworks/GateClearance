@@ -1,5 +1,3 @@
-
-
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -17,13 +15,17 @@ const getServiceSupabase = (): SupabaseClient => {
   });
 };
 
+const convertToDBDate = (formDate: string): string | null => {
+  if (!formDate) return null;
+  const [month, day, year] = formDate.split('-');
+  return `${year}-${month}-${day}`;
+};
+
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-  
-
     const authSupabase = await createClient();
     const { data: { user }, error: authError } = await authSupabase.auth.getUser();
 
@@ -34,22 +36,18 @@ export async function PATCH(
     const { id } = await params;
     const body = await req.json();
 
-    
-    const updateData: {
-      email: string;
-      phone_number: string;
-      company_or_organization: string;
-      purpose_of_visit: string | null;
-      updated_at: string;
-    } = {
+    const updateData: Record<string, string | null> = {
       email: body.email,
       phone_number: body.phoneNumber,
       company_or_organization: body.companyOrOrganization,
       purpose_of_visit: body.purposeOfVisit || null,
+      // Visit dates
+      has_confirmed_date: body.hasConfirmedDate || null,
+      visit_date_1: body.visitDate1 ? convertToDBDate(body.visitDate1) : null,
+      visit_date_2: body.visitDate2 ? convertToDBDate(body.visitDate2) : null,
+      visit_date_3: body.visitDate3 ? convertToDBDate(body.visitDate3) : null,
       updated_at: new Date().toISOString(),
     };
-
-   
 
     const supabase = getServiceSupabase();
     const { error } = await supabase
@@ -59,13 +57,11 @@ export async function PATCH(
       .eq('user_id', user.id);
 
     if (error) {
-    
       return NextResponse.json(
         { error: `Failed to update: ${error.message}` },
         { status: 500 }
       );
     }
-
 
     return NextResponse.json({
       success: true,
@@ -74,7 +70,6 @@ export async function PATCH(
 
   } catch (error) {
     console.error('Failed to update contact info', error);
-
     return NextResponse.json(
       { error: 'Failed to update contact info' },
       { status: 500 }
