@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+// ============================================
+// SHARED HELPERS
+// ============================================
 const phoneRegex = /^\+?[1-9]\d{9,14}$/;
 const dateRegex = /^\d{2}-\d{2}-\d{4}$/;
 
@@ -30,25 +33,36 @@ const isFutureDate = (dateStr: string) => {
   return date >= today;
 };
 
+const requiredString = (fieldLabel: string) =>
+  z.string({ error: `Please enter your ${fieldLabel}` }).min(1, `Please enter your ${fieldLabel}`);
+
+const requiredPhone = z
+  .string({ error: 'Please enter a phone number' })
+  .min(1, 'Please enter a phone number')
+  .refine(
+    (val) => phoneRegex.test(val.replace(/[\s()-]/g, '')),
+    'Please enter a valid phone number (e.g. 415-555-1234)'
+  );
+
 // ============================================
 // STEP 1: COVER SHEET
 // ============================================
 export const annualCoverSchema = z.object({
-  ppName: z.string().min(1, 'Please enter your full name').max(200, 'Name is too long'),
-  contactNumber: z
-    .string()
-    .min(1, 'Please enter your contact number')
-    .refine(
-      (val) => phoneRegex.test(val.replace(/[\s()-]/g, '')),
-      'Please enter a valid phone number'
-    ),
-  email: z.string().min(1, 'Please enter your email').email('Please enter a valid email address'),
-  birthday: z
-    .string()
-    .min(1, 'Please enter your birthday')
+  ppName: requiredString('full name').max(200, 'Name is too long'),
+
+  contactNumber: requiredPhone,
+
+  email: z
+    .string({ error: 'Please enter your email' })
+    .min(1, 'Please enter your email')
+    .email('Please enter a valid email address'),
+
+  birthday: requiredString('birthday')
     .refine(isValidDate, 'Please enter a valid date in MM-DD-YYYY format')
     .refine(isPastOrPresentDate, 'Birthday cannot be in the future'),
-  programName: z.string().min(1, 'Please enter your program name').max(200, 'Program name is too long'),
+
+  programName: requiredString('program name').max(200, 'Program name is too long'),
+
   isRenewal: z.enum(['new', 'renewal'], {
     message: 'Please indicate if this is a new or renewal application',
   }),
@@ -58,25 +72,26 @@ export const annualCoverSchema = z.object({
 // STEP 2: PERSONAL DETAILS (CDCR 966 Section I)
 // ============================================
 export const annualPersonalSchema = z.object({
-  firstName: z.string().min(1, 'Please enter your first name').max(100, 'First name is too long'),
+  firstName: requiredString('first name').max(100, 'First name is too long'),
   middleInitial: z.string().max(1, 'Middle initial must be a single letter').optional(),
-  lastName: z.string().min(1, 'Please enter your last name').max(100, 'Last name is too long'),
-  dateOfBirth: z
-    .string()
-    .min(1, 'Please enter your date of birth')
+  lastName: requiredString('last name').max(100, 'Last name is too long'),
+
+  dateOfBirth: requiredString('date of birth')
     .refine(isValidDate, 'Please enter a valid date in MM-DD-YYYY format'),
-  addressStreet: z.string().min(1, 'Please enter your street address'),
+
+  addressStreet: requiredString('street address'),
   addressApt: z.string().optional(),
-  addressCity: z.string().min(1, 'Please enter your city'),
-  addressState: z.string().min(2, 'Please enter your state').max(2, 'State must be 2 letters (e.g. CA)'),
-  addressZip: z.string().min(5, 'Please enter a valid ZIP code').max(10, 'ZIP code is too long'),
-  phoneNumber: z
-    .string()
-    .min(1, 'Please enter your phone number')
-    .refine(
-      (val) => phoneRegex.test(val.replace(/[\s()-]/g, '')),
-      'Please enter a valid phone number'
-    ),
+  addressCity: requiredString('city'),
+  addressState: z
+    .string({ error: 'Please enter your state' })
+    .min(2, 'Please enter your state (e.g. CA)')
+    .max(2, 'State must be 2 letters (e.g. CA)'),
+  addressZip: z
+    .string({ error: 'Please enter your ZIP code' })
+    .min(5, 'Please enter a valid ZIP code')
+    .max(10, 'ZIP code is too long'),
+
+  phoneNumber: requiredPhone,
   cellNumber: z
     .string()
     .optional()
@@ -84,11 +99,16 @@ export const annualPersonalSchema = z.object({
       (val) => !val || phoneRegex.test(val.replace(/[\s()-]/g, '')),
       'Please enter a valid cell number'
     ),
-  gender: z.enum(['male', 'female'], { message: 'Please select your gender' }),
-  height: z.string().min(1, 'Please enter your height'),
-  weight: z.string().min(1, 'Please enter your weight'),
-  eyeColor: z.string().min(1, 'Please enter your eye color'),
-  hairColor: z.string().min(1, 'Please enter your hair color'),
+
+  gender: z.enum(['male', 'female'], {
+    message: 'Please select your gender',
+  }),
+
+  height: requiredString('height'),
+  weight: requiredString('weight'),
+  eyeColor: requiredString('eye color'),
+  hairColor: requiredString('hair color'),
+
   occupation: z.string().optional(),
   specialSkills: z.string().optional(),
   organizationName: z.string().optional(),
@@ -100,48 +120,83 @@ export const annualPersonalSchema = z.object({
 // ============================================
 export const annualBackgroundSchema = z
   .object({
-    q1LiveScan: z.enum(['yes', 'no'], { message: 'Please answer question 1' }),
+    q1LiveScan: z.enum(['yes', 'no'], {
+      message: 'Please answer: Have you submitted Live Scan fingerprints to CDCR in the past?',
+    }),
     q1LiveScanDetails: z.string().optional(),
-    q2OtherCdcr: z.enum(['yes', 'no'], { message: 'Please answer question 2' }),
+
+    q2OtherCdcr: z.enum(['yes', 'no'], {
+      message: 'Please answer: Do you provide volunteer service at any other CDCR institution?',
+    }),
     q2OtherCdcrDetails: z.string().optional(),
-    q3VisitInmates: z.enum(['yes', 'no'], { message: 'Please answer question 3' }),
+
+    q3VisitInmates: z.enum(['yes', 'no'], {
+      message: 'Please answer: Do you visit or correspond with any inmates at another CDCR institution?',
+    }),
     q3VisitInmatesDetails: z.string().optional(),
-    q4RelatedToInmate: z.enum(['yes', 'no'], { message: 'Please answer question 4' }),
+
+    q4RelatedToInmate: z.enum(['yes', 'no'], {
+      message: 'Please answer: Are you related to any inmate at a CDCR institution?',
+    }),
     q4RelatedDetails: z.string().optional(),
-    q5ArrestedConvicted: z.enum(['yes', 'no'], { message: 'Please answer question 5' }),
+
+    q5ArrestedConvicted: z.enum(['yes', 'no'], {
+      message: 'Please answer: Have you ever been arrested and/or convicted of any offense?',
+    }),
     criminalHistory: z.string().optional(),
-    q6OnParole: z.enum(['yes', 'no'], { message: 'Please answer question 6' }),
+
+    q6OnParole: z.enum(['yes', 'no'], {
+      message: 'Please answer: Are you currently on parole or probation?',
+    }),
     q6ParoleDetails: z.string().optional(),
-    q7Discharged: z.enum(['yes', 'no'], { message: 'Please answer question 7' }),
+
+    q7Discharged: z.enum(['yes', 'no'], {
+      message: 'Please answer: Are you discharged from prison or parole?',
+    }),
     q7DischargeDetails: z.string().optional(),
+    // wardenLetter is a File — validated separately in submit route since
+    // File objects can't round-trip through FormData validation cleanly
     wardenLetter: z.instanceof(File).optional(),
   })
+  // Q1: if yes, must provide details
   .refine(
-    (data) => data.q1LiveScan !== 'yes' || !!data.q1LiveScanDetails?.trim(),
+    (d) => d.q1LiveScan !== 'yes' || (d.q1LiveScanDetails?.trim() ?? '').length > 0,
     { message: 'Please provide the date and location of your Live Scan', path: ['q1LiveScanDetails'] }
   )
+  // Q2: if yes, must provide details
   .refine(
-    (data) => data.q2OtherCdcr !== 'yes' || !!data.q2OtherCdcrDetails?.trim(),
-    { message: 'Please provide the date and location', path: ['q2OtherCdcrDetails'] }
+    (d) => d.q2OtherCdcr !== 'yes' || (d.q2OtherCdcrDetails?.trim() ?? '').length > 0,
+    { message: 'Please provide the date and location of your other CDCR volunteer service', path: ['q2OtherCdcrDetails'] }
   )
+  // Q3: if yes, must provide details
   .refine(
-    (data) => data.q3VisitInmates !== 'yes' || !!data.q3VisitInmatesDetails?.trim(),
-    { message: 'Please provide inmate names, CDCR numbers, and institutions', path: ['q3VisitInmatesDetails'] }
+    (d) => d.q3VisitInmates !== 'yes' || (d.q3VisitInmatesDetails?.trim() ?? '').length > 0,
+    { message: 'Please provide inmate name(s), CDCR number(s), and institution(s)', path: ['q3VisitInmatesDetails'] }
   )
+  // Q4: if yes, must provide details
   .refine(
-    (data) => data.q4RelatedToInmate !== 'yes' || !!data.q4RelatedDetails?.trim(),
+    (d) => d.q4RelatedToInmate !== 'yes' || (d.q4RelatedDetails?.trim() ?? '').length > 0,
     { message: 'Please provide inmate name(s) and CDCR number(s)', path: ['q4RelatedDetails'] }
   )
+  // Q5: if yes, must provide criminal history
   .refine(
-    (data) => data.q6OnParole !== 'yes' || !!data.q6ParoleDetails?.trim(),
-    { message: 'Please provide parole/probation officer name, phone, and county', path: ['q6ParoleDetails'] }
+    (d) => d.q5ArrestedConvicted !== 'yes' || (d.criminalHistory?.trim() ?? '').length > 0,
+    { message: 'Please provide details of your arrest or conviction history', path: ['criminalHistory'] }
   )
+  // Q6: if yes, must provide parole officer details
   .refine(
-    (data) => data.q7Discharged !== 'yes' || !!data.q7DischargeDetails?.trim(),
-    { message: 'Please provide discharge date and institution name', path: ['q7DischargeDetails'] }
+    (d) => d.q6OnParole !== 'yes' || (d.q6ParoleDetails?.trim() ?? '').length > 0,
+    { message: 'Please provide your parole/probation officer\'s name, phone number, and county', path: ['q6ParoleDetails'] }
   )
+  // Q7: if yes, must provide discharge details
   .refine(
-    (data) => data.q7Discharged !== 'yes' || data.wardenLetter instanceof File,
+    (d) => d.q7Discharged !== 'yes' || (d.q7DischargeDetails?.trim() ?? '').length > 0,
+    { message: 'Please provide your discharge date and the name of the institution', path: ['q7DischargeDetails'] }
+  )
+  // Q7: if yes, warden letter is required — checked here for step-level blocking
+  // The submit route also checks for the actual File object
+  .refine(
+    (d) => d.q7Discharged !== 'yes' || d.wardenLetter instanceof File,
     { message: 'Please upload a letter addressed to the Warden', path: ['wardenLetter'] }
   );
 
@@ -150,28 +205,28 @@ export const annualBackgroundSchema = z
 // ============================================
 export const annualEmergencySchema = z.object({
   ssnLast4: z
-    .string()
+    .string({ error: 'Please enter the last 4 digits of your SSN' })
     .min(4, 'Please enter the last 4 digits of your SSN')
     .max(4, 'Must be exactly 4 digits')
-    .refine((val) => /^\d{4}$/.test(val), 'Must be 4 digits'),
-  ec1Name: z.string().min(1, 'Please enter emergency contact name'),
-  ec1Relationship: z.string().min(1, 'Please enter relationship'),
-  ec1Address: z.string().min(1, 'Please enter their address'),
-  ec1HomePhone: z
-    .string()
-    .min(1, 'Please enter a phone number')
-    .refine(
-      (val) => phoneRegex.test(val.replace(/[\s()-]/g, '')),
-      'Please enter a valid phone number'
-    ),
+    .refine((val) => /^\d{4}$/.test(val), 'SSN last 4 must be digits only'),
+
+  // Emergency contact 1 (required)
+  ec1Name: requiredString('emergency contact name'),
+  ec1Relationship: requiredString('relationship'),
+  ec1Address: requiredString('home address'),
+  ec1HomePhone: requiredPhone,
   ec1WorkPhone: z.string().optional(),
   ec1CellPhone: z.string().optional(),
+
+  // Emergency contact 2 (optional — but if any field filled, name is required)
   ec2Name: z.string().optional(),
   ec2Relationship: z.string().optional(),
   ec2Address: z.string().optional(),
   ec2HomePhone: z.string().optional(),
   ec2WorkPhone: z.string().optional(),
   ec2CellPhone: z.string().optional(),
+
+  // Medical info (all optional)
   physicianName: z.string().optional(),
   physicianPhone: z.string().optional(),
   medicalPlanName: z.string().optional(),
@@ -179,34 +234,50 @@ export const annualEmergencySchema = z.object({
   medicalFacility: z.string().optional(),
   specialConditions: z.string().optional(),
   specialInstructions: z.string().optional(),
-});
+})
+// Cross-field: if any EC2 field is filled, EC2 name is required
+.refine(
+  (d) => {
+    const anyEc2Filled = [d.ec2Relationship, d.ec2Address, d.ec2HomePhone, d.ec2WorkPhone, d.ec2CellPhone]
+      .some((v) => v && v.trim().length > 0);
+    if (anyEc2Filled) return d.ec2Name && d.ec2Name.trim().length > 0;
+    return true;
+  },
+  { message: 'Please enter the name of your second emergency contact', path: ['ec2Name'] }
+);
 
 // ============================================
 // STEP 5: ACKNOWLEDGMENT + SIGNATURE
 // ============================================
-// Zod v4: use z.literal(true) with { error: '...' } not { errorMap: ... }
+// Use z.boolean() with refine instead of z.literal(true) so FormValues
+// type compatibility is maintained and SectionForm's canSubmit logic works
 export const annualAcknowledgmentSchema = z.object({
-    certificationAgreement: z
-      .union([z.literal(true), z.literal('true')])
-      .transform(() => true as const)
-      .pipe(z.literal(true)),
-  
-    reasonableAccommodationAck: z
-      .union([z.literal(true), z.literal('true')])
-      .transform(() => true as const)
-      .pipe(z.literal(true)),
-  
-    digitalSignature: z.string().min(1, 'Please provide your digital signature'),
-  
-    consentToDataUse: z
-      .union([z.literal(true), z.literal('true')])
-      .transform(() => true as const)
-      .pipe(z.literal(true)),
-  });
+  certificationAgreement: z
+    .union([z.boolean(), z.string()])
+    .transform((val) => val === true || val === 'true')
+    .pipe(z.literal(true, { error: 'You must certify and agree to the terms' })),
+
+  reasonableAccommodationAck: z
+    .union([z.boolean(), z.string()])
+    .transform((val) => val === true || val === 'true')
+    .pipe(z.literal(true, { error: 'You must acknowledge the reasonable accommodation notice' })),
+
+  digitalSignature: z
+    .string({ error: 'Please provide your digital signature' })
+    .min(1, 'Please provide your digital signature'),
+
+  consentToDataUse: z
+    .union([z.boolean(), z.string()])
+    .transform((val) => val === true || val === 'true')
+    .pipe(z.literal(true, { error: 'You must consent to data use' })),
+});
 
 // ============================================
-// VALIDATION HELPERS
+// FULL APPLICATION SCHEMA
 // ============================================
+// Validates all steps independently so every .refine() is enforced.
+// Also enforces the warden letter cross-step check at submit time
+// (server-side submit route checks the actual File separately).
 export function validateAnnualStep(step: number, data: Record<string, unknown>) {
   switch (step) {
     case 1: return annualCoverSchema.safeParse(data);
@@ -224,20 +295,26 @@ export function validateFullAnnualApplication(data: unknown): {
   errors: { field: string; message: string }[];
 } {
   const allErrors: { field: string; message: string }[] = [];
+
   const steps = [
-    annualCoverSchema,
-    annualPersonalSchema,
-    annualBackgroundSchema,
-    annualEmergencySchema,
-    annualAcknowledgmentSchema,
+    { schema: annualCoverSchema, label: 'Cover sheet' },
+    { schema: annualPersonalSchema, label: 'Personal details' },
+    { schema: annualBackgroundSchema, label: 'Background questions' },
+    { schema: annualEmergencySchema, label: 'Emergency contacts' },
+    { schema: annualAcknowledgmentSchema, label: 'Acknowledgment' },
   ];
-  for (const schema of steps) {
+
+  for (const { schema } of steps) {
     const result = schema.safeParse(data);
     if (!result.success) {
       result.error.issues.forEach((issue) => {
-        allErrors.push({ field: issue.path.join('.') || 'general', message: issue.message });
+        allErrors.push({
+          field: issue.path.join('.') || 'general',
+          message: issue.message,
+        });
       });
     }
   }
+
   return { success: allErrors.length === 0, errors: allErrors };
 }

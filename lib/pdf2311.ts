@@ -37,6 +37,7 @@ export async function loadBlank2311(): Promise<PDFDocument> {
   }
 }
 
+// Confirmed coordinates against the blank CDCR 2311 PDF
 const positions = {
   signature: { x: 180, y: 64, w: 300, h: 30 },
 };
@@ -73,134 +74,151 @@ function getCurrentDate(): string {
   return `${month}-${day}-${year}`;
 }
 
-export async function fill2311(doc: PDFDocument, data: AppRecord) {
+export async function fill2311(doc: PDFDocument, data: AppRecord): Promise<PDFDocument> {
   const [page] = doc.getPages();
   await doc.embedFont(StandardFonts.Helvetica);
   const form = doc.getForm();
 
+  // ── Name ──────────────────────────────────────────────────────────────────
+  // Field: "Legal Last Name First Name and Middle Initial"
   try {
-    const nameField = form.getTextField('Legal Last Name First Name and Middle Initial');
     let fullName = `${data.last_name || ''}, ${data.first_name || ''}`;
-    if (data.middle_name) {
-      fullName += ` ${data.middle_name}`;
-    }
-    nameField.setText(fullName);
-  } catch {}
+    if (data.middle_name) fullName += ` ${data.middle_name}`;
+    form.getTextField('Legal Last Name First Name and Middle Initial').setText(fullName);
+  } catch (e) { console.error('[pdf2311] name:', e); }
 
+  // ── Other names ───────────────────────────────────────────────────────────
+  // Field: "Other names you have been known by"
   try {
     form.getTextField('Other names you have been known by').setText(data.other_names || '');
-  } catch {}
+  } catch (e) { console.error('[pdf2311] other_names:', e); }
 
+  // ── Date of birth ─────────────────────────────────────────────────────────
+  // Field: "Date of Birth Month Day Year"
   try {
     form.getTextField('Date of Birth Month Day Year').setText(data.date_of_birth || '');
-  } catch {}
+  } catch (e) { console.error('[pdf2311] dob:', e); }
 
+  // ── SSN ───────────────────────────────────────────────────────────────────
+  // Fields: "Social Security Number1", "Social Security Number2", "Social Security Number3"
   const ssnSegments = formatSSNSegments(data.ssn_full);
   if (ssnSegments) {
-    try {
-      form.getTextField('Social Security Number1').setText(ssnSegments.part1);
-      form.getTextField('Social Security Number2').setText(ssnSegments.part2);
-      if (ssnSegments.part3) {
-        form.getTextField('Social Security Number3').setText(ssnSegments.part3);
-      }
-    } catch {}
+    try { form.getTextField('Social Security Number1').setText(ssnSegments.part1); } catch (e) { console.error('[pdf2311] ssn1:', e); }
+    try { form.getTextField('Social Security Number2').setText(ssnSegments.part2); } catch (e) { console.error('[pdf2311] ssn2:', e); }
+    try { if (ssnSegments.part3) form.getTextField('Social Security Number3').setText(ssnSegments.part3); } catch (e) { console.error('[pdf2311] ssn3:', e); }
   }
 
+  // ── Phone ─────────────────────────────────────────────────────────────────
+  // Fields: "Contact Number1" (area code), "Contact Number2" (rest)
   const phoneSegments = formatPhoneSegments(data.phone_number);
   if (phoneSegments) {
-    try {
-      form.getTextField('Contact Number1').setText(phoneSegments.area);
-      form.getTextField('Contact Number2').setText(phoneSegments.prefix + phoneSegments.line);
-    } catch {}
+    try { form.getTextField('Contact Number1').setText(phoneSegments.area); } catch (e) { console.error('[pdf2311] phone1:', e); }
+    try { form.getTextField('Contact Number2').setText(phoneSegments.prefix + phoneSegments.line); } catch (e) { console.error('[pdf2311] phone2:', e); }
   }
 
-  try {
-    form.getTextField('State ID or Drivers License').setText(data.gov_id_number || '');
-  } catch {}
+  // ── Government ID ─────────────────────────────────────────────────────────
+  // Field: "State ID or Drivers License" + "State"
+  // OR: "Passport if no State IDDrivers License" (if passport)
+  if (data.gov_id_type === 'passport') {
+    try { form.getTextField('Passport if no State IDDrivers License').setText(data.gov_id_number || ''); } catch (e) { console.error('[pdf2311] passport:', e); }
+  } else {
+    try { form.getTextField('State ID or Drivers License').setText(data.gov_id_number || ''); } catch (e) { console.error('[pdf2311] state_id:', e); }
+    try { form.getTextField('State').setText(data.id_state || ''); } catch (e) { console.error('[pdf2311] id_state:', e); }
+  }
+  // Note: id_expiration is collected in the app but the CDCR 2311 PDF has no expiration date field
 
-  try {
-    form.getTextField('State').setText(data.id_state || '');
-  } catch {}
-
-  try {
-    if (data.gov_id_type === 'passport') {
-      form.getTextField('Passport if no State IDDrivers License').setText(data.gov_id_number || '');
-    }
-  } catch {}
-
+  // ── Gender ────────────────────────────────────────────────────────────────
+  // Field: "Group1" (Male / Female / Non-Binary)
   try {
     const genderGroup = form.getRadioGroup('Group1');
     if (data.gender === 'male') genderGroup.select('Male');
     else if (data.gender === 'female') genderGroup.select('Female');
     else if (data.gender === 'nonbinary') genderGroup.select('Non-Binary');
-  } catch {}
+    // prefer_not_to_say / other: leave unselected — no matching option on the form
+  } catch (e) { console.error('[pdf2311] gender:', e); }
 
+  // ── Visited inmate ────────────────────────────────────────────────────────
+  // Field: "Group2" (No / Yes)
   try {
-    const visitedGroup = form.getRadioGroup('Group2');
-    if (data.visited_inmate === true) visitedGroup.select('Yes');
-    else if (data.visited_inmate === false) visitedGroup.select('No');
-  } catch {}
+    const g = form.getRadioGroup('Group2');
+    if (data.visited_inmate === true) g.select('Yes');
+    else if (data.visited_inmate === false) g.select('No');
+  } catch (e) { console.error('[pdf2311] visited_inmate:', e); }
 
+  // ── Former inmate ─────────────────────────────────────────────────────────
+  // Field: "Group3" (No / Yes)
   try {
-    const formerInmateGroup = form.getRadioGroup('Group3');
-    if (data.former_inmate === true) formerInmateGroup.select('Yes');
-    else if (data.former_inmate === false) formerInmateGroup.select('No');
-  } catch {}
+    const g = form.getRadioGroup('Group3');
+    if (data.former_inmate === true) g.select('Yes');
+    else if (data.former_inmate === false) g.select('No');
+  } catch (e) { console.error('[pdf2311] former_inmate:', e); }
 
+  // ── Restricted access ─────────────────────────────────────────────────────
+  // Field: "Group4" (No / Yes)
   try {
-    const restrictedGroup = form.getRadioGroup('Group4');
-    if (data.restricted_access === true) restrictedGroup.select('Yes');
-    else if (data.restricted_access === false) restrictedGroup.select('No');
-  } catch {}
+    const g = form.getRadioGroup('Group4');
+    if (data.restricted_access === true) g.select('Yes');
+    else if (data.restricted_access === false) g.select('No');
+  } catch (e) { console.error('[pdf2311] restricted_access:', e); }
 
+  // ── Felony conviction ─────────────────────────────────────────────────────
+  // Field: "Group5" (No / Yes)
   try {
-    const felonyGroup = form.getRadioGroup('Group5');
-    if (data.felony_conviction === true) felonyGroup.select('Yes');
-    else if (data.felony_conviction === false) felonyGroup.select('No');
-  } catch {}
+    const g = form.getRadioGroup('Group5');
+    if (data.felony_conviction === true) g.select('Yes');
+    else if (data.felony_conviction === false) g.select('No');
+  } catch (e) { console.error('[pdf2311] felony:', e); }
 
+  // ── Probation / parole ────────────────────────────────────────────────────
+  // Field: "Group6" (No / Yes)
   try {
-    const probationGroup = form.getRadioGroup('Group6');
-    if (data.on_probation_parole === true) probationGroup.select('Yes');
-    else if (data.on_probation_parole === false) probationGroup.select('No');
-  } catch {}
+    const g = form.getRadioGroup('Group6');
+    if (data.on_probation_parole === true) g.select('Yes');
+    else if (data.on_probation_parole === false) g.select('No');
+  } catch (e) { console.error('[pdf2311] probation:', e); }
 
+  // ── Pending charges ───────────────────────────────────────────────────────
+  // Field: "Group7" (No / Yes)
   try {
-    const pendingGroup = form.getRadioGroup('Group7');
-    if (data.pending_charges === true) pendingGroup.select('Yes');
-    else if (data.pending_charges === false) pendingGroup.select('No');
-  } catch {}
+    const g = form.getRadioGroup('Group7');
+    if (data.pending_charges === true) g.select('Yes');
+    else if (data.pending_charges === false) g.select('No');
+  } catch (e) { console.error('[pdf2311] pending_charges:', e); }
 
-  // ✅ FIXED: Group9 has a PDF bug — both options share export value "Gate Clearance".
-  // select() checks both widgets, causing State ID Card to also appear checked.
-  // Fix: directly set widget appearance states.
+  // Note: Group8 = APPROVE / DENY — staff-only field, intentionally left blank
+
+  // ── Authorization type ────────────────────────────────────────────────────
+  // Field: "Group9" — PDF bug: both widgets share export value "Gate Clearance"
+  // so select() checks both. Fix: set widget appearance states directly.
   try {
     const authGroup = form.getRadioGroup('Group9');
     const widgets = authGroup.acroField.getWidgets();
     widgets.forEach((widget, index) => {
-      if (index === 0) {
-        widget.setAppearanceState(PDFName.of('Gate Clearance'));
-      } else {
-        widget.setAppearanceState(PDFName.of('Off'));
-      }
+      if (index === 0) widget.setAppearanceState(PDFName.of('Gate Clearance'));
+      else widget.setAppearanceState(PDFName.of('Off'));
     });
-  } catch {}
+  } catch (e) { console.error('[pdf2311] auth_type:', e); }
 
-  // ✅ Date2 = applicant signature date (Date1 = staff division head, Date3 = hiring authority)
+  // ── Signature date ────────────────────────────────────────────────────────
+  // Field: "Date2" (Date1 = division head, Date3 = hiring authority)
   try {
     form.getTextField('Date2').setText(getCurrentDate());
-  } catch {}
+  } catch (e) { console.error('[pdf2311] date2:', e); }
 
+  // ── Signature image ───────────────────────────────────────────────────────
+  // "Signature of Applicant" is a /Sig field — pdf-lib cannot fill native sig fields.
+  // We draw the captured signature PNG at the field's coordinates instead.
   if (data.signature_data_url) {
     try {
       let base64 = data.signature_data_url;
       const comma = base64.indexOf(',');
       if (comma !== -1) base64 = base64.slice(comma + 1);
+      if (!base64 || base64.length < 100) throw new Error('Signature data is empty or malformed');
       const png = Buffer.from(base64, 'base64');
       const pngImage = await doc.embedPng(png);
       const { x, y, w, h } = positions.signature;
       page.drawImage(pngImage, { x, y, width: w, height: h });
-    } catch {}
+    } catch (e) { console.error('[pdf2311] signature:', e); }
   }
 
   return doc;

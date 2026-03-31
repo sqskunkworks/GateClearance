@@ -102,10 +102,13 @@ export async function POST(req: Request) {
       phone_number: phoneNumber,
       company_or_organization: getString('companyOrOrganization'),
       purpose_of_visit: getString('purposeOfVisit') || null,
+
+      // Visit dates
       has_confirmed_date: getString('hasConfirmedDate') || null,
       visit_date_1: convertToDBDate(getString('visitDate1')),
       visit_date_2: convertToDBDate(getString('visitDate2')),
       visit_date_3: convertToDBDate(getString('visitDate3')),
+
       government_id_type: getString('governmentIdType'),
       government_id_number: governmentIdNumber,
       id_state: getString('idState') || null,
@@ -114,6 +117,10 @@ export async function POST(req: Request) {
       is_us_citizen: getString('isUsCitizen') === 'true',
       former_inmate: getString('formerInmate') === 'yes',
       on_probation_parole: getString('onParole') === 'yes',
+
+      // Additional comments
+      additional_comments: getString('additionalComments') || null,
+
       status: 'submitted',
       submitted_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -160,30 +167,46 @@ export async function POST(req: Request) {
       const filename = `${firstName}_${lastName}_2311.pdf`;
       await uploadPDFToDrive(Buffer.from(bytes), filename);
       await supabase.from('documents').insert({ application_id: applicationId, filename, url: ' ', mime_type: 'application/pdf', size_bytes: bytes.length, uploaded_by_user_id: user.id });
+      console.log('✓ CDCR 2311 PDF uploaded successfully');
     } catch (pdfError: unknown) {
+      console.error('PDF generation failed:', pdfError);
       throw new Error(`Failed to generate PDF: ${pdfError instanceof Error ? pdfError.message : 'Unknown error'}`);
     }
 
     // ── 2. Generate and upload Summary PDF ──────────────────────
     try {
       const summaryData = {
-        firstName: getString('firstName'), middleName: getString('middleName'),
-        lastName: getString('lastName'), otherNames: getString('otherNames'),
-        dateOfBirth: getString('dateOfBirth'), gender: getString('gender'),
-        email: getString('email'), phoneNumber: getString('phoneNumber'),
+        firstName: getString('firstName'),
+        middleName: getString('middleName'),
+        lastName: getString('lastName'),
+        otherNames: getString('otherNames'),
+        dateOfBirth: getString('dateOfBirth'),
+        gender: getString('gender'),
+        email: getString('email'),
+        phoneNumber: getString('phoneNumber'),
         visitDate: getString('visitDate1') || getString('visitDate') || getString('preferredVisitDate'),
-        companyOrOrganization: getString('companyOrOrganization'), purposeOfVisit: getString('purposeOfVisit'),
-        engagedDirectly: getString('engagedDirectly'), perceptions: getString('perceptions'),
-        expectations: getString('expectations'), justiceReformBefore: getString('justiceReformBefore'),
-        interestsMost: getString('interestsMost'), reformFuture: getString('reformFuture'),
-        additionalNotes: getString('additionalNotes'), governmentIdType: getString('governmentIdType'),
-        idState: getString('idState'), idExpiration: getString('idExpiration'),
-        ssnMethod: getString('ssnMethod'), ssnFirstFive: getString('ssnFirstFive'),
-        formerInmate: getString('formerInmate'), onParole: getString('onParole'),
+        companyOrOrganization: getString('companyOrOrganization'),
+        purposeOfVisit: getString('purposeOfVisit'),
+        engagedDirectly: getString('engagedDirectly'),
+        perceptions: getString('perceptions'),
+        expectations: getString('expectations'),
+        justiceReformBefore: getString('justiceReformBefore'),
+        interestsMost: getString('interestsMost'),
+        reformFuture: getString('reformFuture'),
+        additionalNotes: getString('additionalNotes'),
+        governmentIdType: getString('governmentIdType'),
+        idState: getString('idState'),
+        idExpiration: getString('idExpiration'),
+        ssnMethod: getString('ssnMethod'),
+        ssnFirstFive: getString('ssnFirstFive'),
+        formerInmate: getString('formerInmate'),
+        onParole: getString('onParole'),
         isUsCitizen: getString('isUsCitizen'),
         passportScan: formData.get('passportScan') as File | undefined,
         wardenLetter: formData.get('wardenLetter') as File | undefined,
-        applicationId, submittedAt: new Date().toISOString(),
+        additionalComments: getString('additionalComments'),
+        applicationId,
+        submittedAt: new Date().toISOString(),
       };
       const summaryPdfBytes = await generateSummaryPDF(summaryData);
       const firstName = getString('firstName').replace(/[^a-zA-Z]/g, '');
@@ -191,6 +214,7 @@ export async function POST(req: Request) {
       const summaryFilename = `${firstName}_${lastName}_additional_info.pdf`;
       await uploadPDFToDrive(Buffer.from(summaryPdfBytes), summaryFilename);
       await supabase.from('documents').insert({ application_id: applicationId, filename: summaryFilename, url: ' ', mime_type: 'application/pdf', size_bytes: summaryPdfBytes.length, uploaded_by_user_id: user.id });
+      console.log('✓ Summary PDF uploaded successfully');
     } catch (summaryError: unknown) {
       console.error('Summary PDF generation failed:', summaryError);
     }
@@ -205,15 +229,18 @@ export async function POST(req: Request) {
       }
       try {
         const passportBuffer = Buffer.from(await passportScanFile.arrayBuffer());
-        if (!passportBuffer.length) throw new Error('Passport file is empty');
-        let ext = 'pdf';
-        if (passportScanFile.type.includes('jpeg') || passportScanFile.type.includes('jpg')) ext = 'jpg';
-        else if (passportScanFile.type.includes('png')) ext = 'png';
-        const fn = `${getString('firstName').replace(/[^a-zA-Z]/g, '')}_${getString('lastName').replace(/[^a-zA-Z]/g, '')}_passport.${ext}`;
-        await uploadPDFToDrive(passportBuffer, fn);
-        await supabase.from('documents').insert({ application_id: applicationId, filename: fn, url: ' ', mime_type: passportScanFile.type, size_bytes: passportBuffer.length, uploaded_by_user_id: user.id });
+        if (!passportBuffer || passportBuffer.length === 0) throw new Error('Passport file is empty');
+        let extension = 'pdf';
+        if (passportScanFile.type === 'image/jpeg' || passportScanFile.type === 'image/jpg') extension = 'jpg';
+        else if (passportScanFile.type === 'image/png') extension = 'png';
+        const firstName = getString('firstName').replace(/[^a-zA-Z]/g, '');
+        const lastName = getString('lastName').replace(/[^a-zA-Z]/g, '');
+        const passportFilename = `${firstName}_${lastName}_passport.${extension}`;
+        await uploadPDFToDrive(passportBuffer, passportFilename);
+        await supabase.from('documents').insert({ application_id: applicationId, filename: passportFilename, url: ' ', mime_type: passportScanFile.type, size_bytes: passportBuffer.length, uploaded_by_user_id: user.id });
+        console.log('✓ Passport scan uploaded successfully');
       } catch (passportError: unknown) {
-        return NextResponse.json({ error: 'Failed to upload passport scan', details: passportError instanceof Error ? passportError.message : 'Unknown' }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to upload passport scan', details: passportError instanceof Error ? passportError.message : 'Unknown error' }, { status: 500 });
       }
     }
 
@@ -225,13 +252,17 @@ export async function POST(req: Request) {
       }
       try {
         const wardenBuffer = Buffer.from(await wardenLetterFile.arrayBuffer());
-        if (!wardenBuffer.length) throw new Error('Clearance letter file is empty');
-        const ext = wardenLetterFile.type.includes('pdf') ? 'pdf' : 'jpg';
-        const fn = `${getString('firstName').replace(/[^a-zA-Z]/g, '')}_${getString('lastName').replace(/[^a-zA-Z]/g, '')}_clearance_letter.${ext}`;
-        await uploadPDFToDrive(wardenBuffer, fn);
-        await supabase.from('documents').insert({ application_id: applicationId, filename: fn, url: ' ', mime_type: wardenLetterFile.type, size_bytes: wardenBuffer.length, uploaded_by_user_id: user.id });
+        if (!wardenBuffer || wardenBuffer.length === 0) throw new Error('Clearance letter file is empty');
+        const extension = wardenLetterFile.type.includes('pdf') ? 'pdf' : 'jpg';
+        const firstName = getString('firstName').replace(/[^a-zA-Z]/g, '');
+        const lastName = getString('lastName').replace(/[^a-zA-Z]/g, '');
+        const wardenFilename = `${firstName}_${lastName}_clearance_letter.${extension}`;
+        await uploadPDFToDrive(wardenBuffer, wardenFilename);
+        await supabase.from('documents').insert({ application_id: applicationId, filename: wardenFilename, url: ' ', mime_type: wardenLetterFile.type, size_bytes: wardenBuffer.length, uploaded_by_user_id: user.id });
+        console.log('✓ Clearance letter uploaded successfully');
       } catch (wardenError: unknown) {
-        return NextResponse.json({ error: 'Failed to upload clearance letter', details: wardenError instanceof Error ? wardenError.message : 'Unknown' }, { status: 500 });
+        console.error('Clearance letter upload failed:', wardenError);
+        return NextResponse.json({ error: 'Failed to upload clearance letter', details: wardenError instanceof Error ? wardenError.message : 'Unknown error' }, { status: 500 });
       }
     }
 
@@ -246,7 +277,9 @@ export async function POST(req: Request) {
         visitDate1: getString('visitDate1') || undefined,
         visitDate2: getString('visitDate2') || undefined,
         visitDate3: getString('visitDate3') || undefined,
+        additionalComments: getString('additionalComments') || undefined,
       });
+      console.log('✓ Email notification sent successfully');
     } catch (emailError: unknown) {
       console.error('Email notification failed:', emailError);
     }
