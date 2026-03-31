@@ -85,7 +85,7 @@ export async function GET(
       idExpiration: convertToFormDate(data.id_expiration),
       digitalSignature: data.digital_signature || '',
       isUsCitizen: data.is_us_citizen === null ? '' : (data.is_us_citizen ? 'true' : 'false'),
-
+      additionalComments: data.additional_comments || '',
       // Background questions (only for submitted applications)
       formerInmate: isNewDraft ? '' : (data.former_inmate ? 'yes' : 'no'),
       onParole: isNewDraft ? '' : (data.on_probation_parole ? 'yes' : 'no'),

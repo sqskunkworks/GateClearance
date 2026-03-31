@@ -92,7 +92,6 @@ export async function POST(req: Request) {
 
     const dataForValidation = { applicationId, ...formDataObj };
 
-    // ✅ FIX 1: validateFullApplication now returns { success, errors } not { success, error }
     const validationResult = validateFullApplication(dataForValidation);
 
     if (!validationResult.success) {
@@ -147,6 +146,9 @@ export async function POST(req: Request) {
       former_inmate: getString('formerInmate') === 'yes',
       on_probation_parole: getString('onParole') === 'yes',
 
+      // ✅ Additional comments
+      additional_comments: getString('additionalComments') || null,
+
       status: 'submitted',
       submitted_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -195,7 +197,6 @@ export async function POST(req: Request) {
     // ============================================
     try {
       const pdfDoc = await loadBlank2311();
-      // ✅ FIX 2: fill2311 returns PDFDocument directly, use bytes consistently
       const filledPdf = await fill2311(pdfDoc, pdfRecord);
       const bytes = await filledPdf.save();
 
@@ -207,7 +208,6 @@ export async function POST(req: Request) {
       const lastName = getString('lastName').replace(/[^a-zA-Z]/g, '');
       const filename = `${firstName}_${lastName}_2311.pdf`;
 
-      // ✅ FIX 3: use bytes not pdfBytes
       const pdfBuffer = Buffer.from(bytes);
       await uploadPDFToDrive(pdfBuffer, filename);
 
@@ -262,6 +262,9 @@ export async function POST(req: Request) {
         isUsCitizen: getString('isUsCitizen'),
         passportScan: formData.get('passportScan') as File | undefined,
         wardenLetter: formData.get('wardenLetter') as File | undefined,
+
+        // ✅ Additional comments in summary PDF
+        additionalComments: getString('additionalComments'),
 
         applicationId,
         submittedAt: new Date().toISOString(),
@@ -407,6 +410,8 @@ export async function POST(req: Request) {
         visitDate1: getString('visitDate1') || undefined,
         visitDate2: getString('visitDate2') || undefined,
         visitDate3: getString('visitDate3') || undefined,
+        // ✅ Additional comments in email
+        additionalComments: getString('additionalComments') || undefined,
       });
 
       console.log('✓ Email notification sent successfully');
