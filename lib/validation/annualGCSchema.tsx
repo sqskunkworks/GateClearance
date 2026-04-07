@@ -49,20 +49,15 @@ const requiredPhone = z
 // ============================================
 export const annualCoverSchema = z.object({
   ppName: requiredString('full name').max(200, 'Name is too long'),
-
   contactNumber: requiredPhone,
-
   email: z
     .string({ error: 'Please enter your email' })
     .min(1, 'Please enter your email')
     .email('Please enter a valid email address'),
-
   birthday: requiredString('birthday')
     .refine(isValidDate, 'Please enter a valid date in MM-DD-YYYY format')
     .refine(isPastOrPresentDate, 'Birthday cannot be in the future'),
-
   programName: requiredString('program name').max(200, 'Program name is too long'),
-
   isRenewal: z.enum(['new', 'renewal'], {
     message: 'Please indicate if this is a new or renewal application',
   }),
@@ -75,10 +70,8 @@ export const annualPersonalSchema = z.object({
   firstName: requiredString('first name').max(100, 'First name is too long'),
   middleInitial: z.string().max(1, 'Middle initial must be a single letter').optional(),
   lastName: requiredString('last name').max(100, 'Last name is too long'),
-
   dateOfBirth: requiredString('date of birth')
     .refine(isValidDate, 'Please enter a valid date in MM-DD-YYYY format'),
-
   addressStreet: requiredString('street address'),
   addressApt: z.string().optional(),
   addressCity: requiredString('city'),
@@ -90,7 +83,6 @@ export const annualPersonalSchema = z.object({
     .string({ error: 'Please enter your ZIP code' })
     .min(5, 'Please enter a valid ZIP code')
     .max(10, 'ZIP code is too long'),
-
   phoneNumber: requiredPhone,
   cellNumber: z
     .string()
@@ -99,16 +91,11 @@ export const annualPersonalSchema = z.object({
       (val) => !val || phoneRegex.test(val.replace(/[\s()-]/g, '')),
       'Please enter a valid cell number'
     ),
-
-  gender: z.enum(['male', 'female'], {
-    message: 'Please select your gender',
-  }),
-
+  gender: z.enum(['male', 'female'], { message: 'Please select your gender' }),
   height: requiredString('height'),
   weight: requiredString('weight'),
   eyeColor: requiredString('eye color'),
   hairColor: requiredString('hair color'),
-
   occupation: z.string().optional(),
   specialSkills: z.string().optional(),
   organizationName: z.string().optional(),
@@ -154,51 +141,43 @@ export const annualBackgroundSchema = z
       message: 'Please answer: Are you discharged from prison or parole?',
     }),
     q7DischargeDetails: z.string().optional(),
-    // wardenLetter is a File — validated separately in submit route since
-    // File objects can't round-trip through FormData validation cleanly
+
+    // ✅ FIX 1: wardenLetter File check removed from schema.
+    // File objects cannot be restored when a draft is reloaded — requiring
+    // instanceof File here would permanently block resumed drafts where
+    // q7Discharged === 'yes'. The server-side submit route handles the actual
+    // file presence check instead.
     wardenLetter: z.instanceof(File).optional(),
   })
-  // Q1: if yes, must provide details
   .refine(
     (d) => d.q1LiveScan !== 'yes' || (d.q1LiveScanDetails?.trim() ?? '').length > 0,
     { message: 'Please provide the date and location of your Live Scan', path: ['q1LiveScanDetails'] }
   )
-  // Q2: if yes, must provide details
   .refine(
     (d) => d.q2OtherCdcr !== 'yes' || (d.q2OtherCdcrDetails?.trim() ?? '').length > 0,
     { message: 'Please provide the date and location of your other CDCR volunteer service', path: ['q2OtherCdcrDetails'] }
   )
-  // Q3: if yes, must provide details
   .refine(
     (d) => d.q3VisitInmates !== 'yes' || (d.q3VisitInmatesDetails?.trim() ?? '').length > 0,
     { message: 'Please provide inmate name(s), CDCR number(s), and institution(s)', path: ['q3VisitInmatesDetails'] }
   )
-  // Q4: if yes, must provide details
   .refine(
     (d) => d.q4RelatedToInmate !== 'yes' || (d.q4RelatedDetails?.trim() ?? '').length > 0,
     { message: 'Please provide inmate name(s) and CDCR number(s)', path: ['q4RelatedDetails'] }
   )
-  // Q5: if yes, must provide criminal history
   .refine(
     (d) => d.q5ArrestedConvicted !== 'yes' || (d.criminalHistory?.trim() ?? '').length > 0,
     { message: 'Please provide details of your arrest or conviction history', path: ['criminalHistory'] }
   )
-  // Q6: if yes, must provide parole officer details
   .refine(
     (d) => d.q6OnParole !== 'yes' || (d.q6ParoleDetails?.trim() ?? '').length > 0,
-    { message: 'Please provide your parole/probation officer\'s name, phone number, and county', path: ['q6ParoleDetails'] }
+    { message: "Please provide your parole/probation officer's name, phone number, and county", path: ['q6ParoleDetails'] }
   )
-  // Q7: if yes, must provide discharge details
   .refine(
     (d) => d.q7Discharged !== 'yes' || (d.q7DischargeDetails?.trim() ?? '').length > 0,
     { message: 'Please provide your discharge date and the name of the institution', path: ['q7DischargeDetails'] }
-  )
-  // Q7: if yes, warden letter is required — checked here for step-level blocking
-  // The submit route also checks for the actual File object
-  .refine(
-    (d) => d.q7Discharged !== 'yes' || d.wardenLetter instanceof File,
-    { message: 'Please upload a letter addressed to the Warden', path: ['wardenLetter'] }
   );
+  // NOTE: warden letter file presence is enforced server-side in submit route only
 
 // ============================================
 // STEP 4: EMERGENCY CONTACTS (CDCR 894)
@@ -209,24 +188,18 @@ export const annualEmergencySchema = z.object({
     .min(4, 'Please enter the last 4 digits of your SSN')
     .max(4, 'Must be exactly 4 digits')
     .refine((val) => /^\d{4}$/.test(val), 'SSN last 4 must be digits only'),
-
-  // Emergency contact 1 (required)
   ec1Name: requiredString('emergency contact name'),
   ec1Relationship: requiredString('relationship'),
   ec1Address: requiredString('home address'),
   ec1HomePhone: requiredPhone,
   ec1WorkPhone: z.string().optional(),
   ec1CellPhone: z.string().optional(),
-
-  // Emergency contact 2 (optional — but if any field filled, name is required)
   ec2Name: z.string().optional(),
   ec2Relationship: z.string().optional(),
   ec2Address: z.string().optional(),
   ec2HomePhone: z.string().optional(),
   ec2WorkPhone: z.string().optional(),
   ec2CellPhone: z.string().optional(),
-
-  // Medical info (all optional)
   physicianName: z.string().optional(),
   physicianPhone: z.string().optional(),
   medicalPlanName: z.string().optional(),
@@ -235,7 +208,6 @@ export const annualEmergencySchema = z.object({
   specialConditions: z.string().optional(),
   specialInstructions: z.string().optional(),
 })
-// Cross-field: if any EC2 field is filled, EC2 name is required
 .refine(
   (d) => {
     const anyEc2Filled = [d.ec2Relationship, d.ec2Address, d.ec2HomePhone, d.ec2WorkPhone, d.ec2CellPhone]
@@ -249,8 +221,6 @@ export const annualEmergencySchema = z.object({
 // ============================================
 // STEP 5: ACKNOWLEDGMENT + SIGNATURE
 // ============================================
-// Use z.boolean() with refine instead of z.literal(true) so FormValues
-// type compatibility is maintained and SectionForm's canSubmit logic works
 export const annualAcknowledgmentSchema = z.object({
   certificationAgreement: z
     .union([z.boolean(), z.string()])
@@ -273,11 +243,8 @@ export const annualAcknowledgmentSchema = z.object({
 });
 
 // ============================================
-// FULL APPLICATION SCHEMA
+// VALIDATION HELPERS
 // ============================================
-// Validates all steps independently so every .refine() is enforced.
-// Also enforces the warden letter cross-step check at submit time
-// (server-side submit route checks the actual File separately).
 export function validateAnnualStep(step: number, data: Record<string, unknown>) {
   switch (step) {
     case 1: return annualCoverSchema.safeParse(data);
@@ -295,26 +262,20 @@ export function validateFullAnnualApplication(data: unknown): {
   errors: { field: string; message: string }[];
 } {
   const allErrors: { field: string; message: string }[] = [];
-
   const steps = [
-    { schema: annualCoverSchema, label: 'Cover sheet' },
-    { schema: annualPersonalSchema, label: 'Personal details' },
-    { schema: annualBackgroundSchema, label: 'Background questions' },
-    { schema: annualEmergencySchema, label: 'Emergency contacts' },
-    { schema: annualAcknowledgmentSchema, label: 'Acknowledgment' },
+    annualCoverSchema,
+    annualPersonalSchema,
+    annualBackgroundSchema,
+    annualEmergencySchema,
+    annualAcknowledgmentSchema,
   ];
-
-  for (const { schema } of steps) {
+  for (const schema of steps) {
     const result = schema.safeParse(data);
     if (!result.success) {
       result.error.issues.forEach((issue) => {
-        allErrors.push({
-          field: issue.path.join('.') || 'general',
-          message: issue.message,
-        });
+        allErrors.push({ field: issue.path.join('.') || 'general', message: issue.message });
       });
     }
   }
-
   return { success: allErrors.length === 0, errors: allErrors };
 }
