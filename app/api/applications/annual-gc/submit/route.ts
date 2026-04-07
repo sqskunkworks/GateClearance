@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseClient, type SupabaseClient } from '@supabase/supabase-js';
 import { validateFullAnnualApplication } from '@/lib/validation/annualGCSchema';
-import { uploadPDFToDrive } from '@/lib/googleDrive';
+import { uploadDocument, documentExists } from '@/lib/uploadDocument';
 
 export const runtime = 'nodejs';
 
@@ -69,47 +69,33 @@ export async function POST(req: Request) {
     }
 
     // ── Warden letter check ──────────────────────────────────────
-    // File was uploaded eagerly at step 3 PATCH. On submit we check the
-    // documents table instead of requiring a live File object — this means
-    // resumed drafts work correctly without needing to re-upload.
+    // File uploaded eagerly at step 3. On submit we check the documents
+    // table first — resumed drafts work without re-uploading.
     if (getString('q7Discharged') === 'yes') {
       const wardenLetterFile = formData.get('wardenLetter');
       const hasNewFile = wardenLetterFile instanceof File;
+      const alreadyUploaded = await documentExists(applicationId, 'warden_letter');
 
-      // Check if already uploaded in a previous session
-      const { data: existingDoc } = await supabase
-        .from('documents')
-        .select('id')
-        .eq('application_id', applicationId)
-        .ilike('filename', '%warden_letter%')
-        .single();
-
-      if (!hasNewFile && !existingDoc) {
+      if (!hasNewFile && !alreadyUploaded) {
         return NextResponse.json(
           { error: 'Please upload a letter addressed to the Warden' },
           { status: 400 }
         );
       }
 
-      // If a new file was provided, upload it (replaces existing)
+      // Re-upload if a new file was provided
       if (hasNewFile && wardenLetterFile instanceof File) {
-        try {
-          const buffer = Buffer.from(await wardenLetterFile.arrayBuffer());
-          const ext = wardenLetterFile.type.includes('pdf') ? 'pdf' : 'jpg';
-          const fn = `${getString('firstName').replace(/[^a-zA-Z]/g, '')}_${getString('lastName').replace(/[^a-zA-Z]/g, '')}_warden_letter.${ext}`;
-
-          await uploadPDFToDrive(buffer, fn);
-
-          await supabase.from('documents').delete()
-            .eq('application_id', applicationId)
-            .ilike('filename', '%warden_letter%');
-
-          await supabase.from('documents').insert({
-            application_id: applicationId, filename: fn, url: ' ',
-            mime_type: wardenLetterFile.type, size_bytes: buffer.length, uploaded_by_user_id: user.id,
-          });
-        } catch (e) {
-          console.error('Warden letter upload failed at submit:', e);
+        const firstName = getString('firstName').replace(/[^a-zA-Z]/g, '');
+        const lastName = getString('lastName').replace(/[^a-zA-Z]/g, '');
+        const result = await uploadDocument({
+          applicationId,
+          userId: user.id,
+          file: wardenLetterFile,
+          documentType: 'warden_letter',
+          namePrefix: `${firstName}_${lastName}`,
+        });
+        if (!result.success) {
+          console.error('Warden letter upload failed at submit:', result.error);
         }
       }
     }

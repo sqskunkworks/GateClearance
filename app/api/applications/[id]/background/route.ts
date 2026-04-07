@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseClient, type SupabaseClient } from '@supabase/supabase-js';
-import { uploadPDFToDrive } from '@/lib/googleDrive';
+import { uploadDocument, validateUploadFile } from '@/lib/uploadDocument';
 
 export const runtime = 'nodejs';
 
@@ -22,8 +22,6 @@ export async function PATCH(
     if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { id } = await params;
-
-    // Use FormData instead of JSON so we can receive the warden letter file
     const formData = await req.formData();
 
     const getString = (key: string) => {
@@ -59,52 +57,42 @@ export async function PATCH(
     if (error) return NextResponse.json({ error: `Failed to update: ${error.message}` }, { status: 500 });
 
     // ── Upload warden letter eagerly at step 3 ───────────────────
-    // Uploading here (not at submit) means the file is preserved even if
-    // the user leaves and resumes the draft later. On resume, the submit
-    // route checks the documents table instead of requiring a live File object.
+    // Using the shared uploadDocument utility — no copy-pasted upload logic here.
     const wardenLetterFile = formData.get('wardenLetter');
     if (getString('q7Discharged') === 'yes' && wardenLetterFile instanceof File) {
-      try {
-        // Fetch applicant name for filename
-        const { data: app } = await supabase
-          .from('applications')
-          .select('first_name, last_name')
-          .eq('id', id)
-          .single();
-
-        const firstName = (app?.first_name || 'applicant').replace(/[^a-zA-Z]/g, '');
-        const lastName = (app?.last_name || '').replace(/[^a-zA-Z]/g, '');
-        const ext = wardenLetterFile.type.includes('pdf') ? 'pdf' : 'jpg';
-        const filename = `${firstName}_${lastName}_warden_letter.${ext}`;
-
-        const buffer = Buffer.from(await wardenLetterFile.arrayBuffer());
-        await uploadPDFToDrive(buffer, filename);
-
-        // Upsert — delete any existing warden letter for this application
-        // then insert the new one, so re-uploads replace the old file record
-        await supabase
-          .from('documents')
-          .delete()
-          .eq('application_id', id)
-          .ilike('filename', '%warden_letter%');
-
-        await supabase.from('documents').insert({
-          application_id: id,
-          filename,
-          url: ' ',
-          mime_type: wardenLetterFile.type,
-          size_bytes: buffer.length,
-          uploaded_by_user_id: user.id,
-        });
-
-        console.log('✓ Warden letter uploaded at step 3');
-      } catch (uploadError) {
-        console.error('Warden letter upload failed at step 3:', uploadError);
-        // Don't fail the whole PATCH — return a warning so client can inform user
+      // Validate before fetching applicant name to fail fast
+      const validation = validateUploadFile(wardenLetterFile);
+      if (!validation.valid) {
         return NextResponse.json({
           success: true,
           message: 'Background questions saved',
-          warning: 'Warden letter upload failed — please try re-uploading before submitting',
+          warning: validation.error,
+        });
+      }
+
+      // Fetch name for filename prefix
+      const { data: app } = await supabase
+        .from('applications')
+        .select('first_name, last_name')
+        .eq('id', id)
+        .single();
+
+      const firstName = (app?.first_name || 'applicant').replace(/[^a-zA-Z]/g, '');
+      const lastName = (app?.last_name || '').replace(/[^a-zA-Z]/g, '');
+
+      const result = await uploadDocument({
+        applicationId: id,
+        userId: user.id,
+        file: wardenLetterFile,
+        documentType: 'warden_letter',
+        namePrefix: `${firstName}_${lastName}`,
+      });
+
+      if (!result.success) {
+        return NextResponse.json({
+          success: true,
+          message: 'Background questions saved',
+          warning: result.error,
         });
       }
     }
