@@ -70,6 +70,13 @@ export const applications = pgTable("applications", {
   authorizationType: text("authorization_type").notNull(),
   isUsCitizen: boolean("is_us_citizen"),
 
+  // ── GC/BC derived field ───────────────────────────────────────
+  // Automatically set based on application_type — never user-selected.
+  // GC (annual_gc): escort required = true
+  // BC (brown_card): escort required = false (admin upgrades type later)
+  // short_gc: escort required = true (always escorted for one-time visits)
+  escortRequired: boolean("escort_required").notNull().default(true),
+
   // Government ID
   governmentIdType: governmentIdTypeEnum("government_id_type").notNull(),
   governmentIdNumber: text("government_id_number").notNull(),
@@ -86,6 +93,7 @@ export const applications = pgTable("applications", {
   pendingCharges: boolean("pending_charges").notNull().default(false),
 
   digitalSignature: text("digital_signature"),
+  additionalComments: text("additional_comments"),
   status: appStatusEnum("status").notNull().default("draft"),
   submittedAt: timestamp("submitted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -94,7 +102,7 @@ export const applications = pgTable("applications", {
   rulesQuizAnswers: jsonb("rules_quiz_answers"),
 
   // ─────────────────────────────────────────────────────────────────
-  // ANNUAL GC ONLY — all nullable, ignored by short_gc flow
+  // ANNUAL GC / BROWN CARD ONLY — all nullable, ignored by short_gc
   // ─────────────────────────────────────────────────────────────────
   isRenewal: boolean("is_renewal"),
   programName: text("program_name"),

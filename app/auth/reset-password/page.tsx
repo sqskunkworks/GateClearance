@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { Shield, Lock, AlertCircle, CheckCircle } from 'lucide-react';
@@ -13,11 +13,6 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const supabase = createClient();
-
-  useEffect(() => {
-    // Supabase handles the token from the URL hash automatically
-    // when the user lands on this page via the reset link
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,8 +31,13 @@ export default function ResetPasswordPage() {
     try {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
+
+      // Sign out to fully clear the recovery session so future
+      // forgot-password flows work cleanly
+      await supabase.auth.signOut();
+
       setDone(true);
-      setTimeout(() => router.push('/test-application/1'), 2500);
+      setTimeout(() => router.push('/auth/login'), 2500);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to reset password');
     } finally {
@@ -63,7 +63,7 @@ export default function ResetPasswordPage() {
                 <CheckCircle className="w-6 h-6" style={{ color: '#355F7A' }} />
               </div>
               <p className="text-sm font-medium" style={{ color: '#1F2933' }}>Password updated!</p>
-              <p className="text-sm" style={{ color: '#1C3D5A' }}>Redirecting you to your application...</p>
+              <p className="text-sm" style={{ color: '#1C3D5A' }}>Redirecting you to sign in...</p>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5">

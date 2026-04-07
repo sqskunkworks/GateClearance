@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseClient, type SupabaseClient } from '@supabase/supabase-js';
 import { validateFullAnnualApplication } from '@/lib/validation/annualGCSchema';
-import { uploadPDFToDrive } from '@/lib/googleDrive';
+import { uploadDocument, documentExists } from '@/lib/uploadDocument';
 
 export const runtime = 'nodejs';
 
@@ -18,6 +18,9 @@ const convertToDBDate = (formDate: string): string | null => {
   const [month, day, year] = formDate.split('-');
   return `${year}-${month}-${day}`;
 };
+
+const deriveEscortRequired = (applicationType: string): boolean =>
+  applicationType !== 'brown_card';
 
 export async function POST(req: Request) {
   try {
@@ -37,7 +40,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Draft not found' }, { status: 404 });
     }
 
-    // Build formDataObj from FormData
+    const applicationType = application.application_type || 'annual_gc';
+    const escortRequired = deriveEscortRequired(applicationType);
+
     const formDataObj: Record<string, string | boolean | File> = {};
     for (const [key, value] of formData.entries()) {
       if (value instanceof File) formDataObj[key] = value;
@@ -49,7 +54,12 @@ export async function POST(req: Request) {
       return typeof v === 'string' ? v : '';
     };
 
-    // Server-side validation
+    // Coerce checkbox booleans
+    const booleanFields = ['certificationAgreement', 'reasonableAccommodationAck', 'consentToDataUse'];
+    for (const field of booleanFields) {
+      if (formDataObj[field] === 'true') formDataObj[field] = true as unknown as string;
+    }
+
     const validationResult = validateFullAnnualApplication(formDataObj);
     if (!validationResult.success) {
       return NextResponse.json(
@@ -58,17 +68,45 @@ export async function POST(req: Request) {
       );
     }
 
-    // Update all annual_gc fields on final submit
+    // ── Warden letter check ──────────────────────────────────────
+    // File uploaded eagerly at step 3. On submit we check the documents
+    // table first — resumed drafts work without re-uploading.
+    if (getString('q7Discharged') === 'yes') {
+      const wardenLetterFile = formData.get('wardenLetter');
+      const hasNewFile = wardenLetterFile instanceof File;
+      const alreadyUploaded = await documentExists(applicationId, 'warden_letter');
+
+      if (!hasNewFile && !alreadyUploaded) {
+        return NextResponse.json(
+          { error: 'Please upload a letter addressed to the Warden' },
+          { status: 400 }
+        );
+      }
+
+      // Re-upload if a new file was provided
+      if (hasNewFile && wardenLetterFile instanceof File) {
+        const firstName = getString('firstName').replace(/[^a-zA-Z]/g, '');
+        const lastName = getString('lastName').replace(/[^a-zA-Z]/g, '');
+        const result = await uploadDocument({
+          applicationId,
+          userId: user.id,
+          file: wardenLetterFile,
+          documentType: 'warden_letter',
+          namePrefix: `${firstName}_${lastName}`,
+        });
+        if (!result.success) {
+          console.error('Warden letter upload failed at submit:', result.error);
+        }
+      }
+    }
+
     const updateData: Record<string, string | boolean | null> = {
-      // Cover sheet
       pp_name: getString('ppName') || null,
       program_name: getString('programName') || null,
       is_renewal: getString('isRenewal') === 'renewal',
       birthday: convertToDBDate(getString('birthday')),
       phone_number: getString('contactNumber') || null,
       email: getString('email') || null,
-
-      // Personal (CDCR 966 Section I)
       first_name: getString('firstName'),
       middle_initial: getString('middleInitial') || null,
       last_name: getString('lastName'),
@@ -88,8 +126,6 @@ export async function POST(req: Request) {
       special_skills: getString('specialSkills') || null,
       company_or_organization: getString('organizationName') || '',
       organization_address: getString('organizationAddress') || null,
-
-      // Background questions
       q1_live_scan: getString('q1LiveScan') === 'yes',
       q1_live_scan_details: getString('q1LiveScanDetails') || null,
       q2_other_cdcr: getString('q2OtherCdcr') === 'yes',
@@ -103,8 +139,6 @@ export async function POST(req: Request) {
       q6_parole_details: getString('q6ParoleDetails') || null,
       q7_discharged: getString('q7Discharged') === 'yes',
       q7_discharge_details: getString('q7DischargeDetails') || null,
-
-      // Emergency contacts
       ssn_last4: getString('ssnLast4') || null,
       ec1_name: getString('ec1Name') || null,
       ec1_relationship: getString('ec1Relationship') || null,
@@ -125,12 +159,10 @@ export async function POST(req: Request) {
       medical_facility: getString('medicalFacility') || null,
       special_conditions: getString('specialConditions') || null,
       special_instructions: getString('specialInstructions') || null,
-
-      // Acknowledgment + signature
       certification_agreement: true,
       reasonable_accommodation_ack: true,
       digital_signature: getString('digitalSignature'),
-
+      escort_required: escortRequired,
       status: 'submitted',
       submitted_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -141,23 +173,6 @@ export async function POST(req: Request) {
 
     if (updateError) {
       return NextResponse.json({ error: `Failed to submit: ${updateError.message}` }, { status: 500 });
-    }
-
-    // Upload warden letter if discharged (Q7)
-    const wardenLetterFile = formData.get('wardenLetter');
-    if (getString('q7Discharged') === 'yes' && wardenLetterFile instanceof File) {
-      try {
-        const buffer = Buffer.from(await wardenLetterFile.arrayBuffer());
-        const ext = wardenLetterFile.type.includes('pdf') ? 'pdf' : 'jpg';
-        const fn = `${getString('firstName').replace(/[^a-zA-Z]/g, '')}_${getString('lastName').replace(/[^a-zA-Z]/g, '')}_warden_letter.${ext}`;
-        await uploadPDFToDrive(buffer, fn);
-        await supabase.from('documents').insert({
-          application_id: applicationId, filename: fn, url: ' ',
-          mime_type: wardenLetterFile.type, size_bytes: buffer.length, uploaded_by_user_id: user.id,
-        });
-      } catch (e) {
-        console.error('Warden letter upload failed:', e);
-      }
     }
 
     return NextResponse.json({ success: true, message: 'Annual GC application submitted', applicationId });
