@@ -166,9 +166,14 @@ if (currentStep === 2) {
 
       // ── Step 3: Background questions ─────────────────────────
       if (currentStep === 3) {
+        const fd = new FormData();
+        Object.entries(updatedFormData).forEach(([k, v]) => {
+          if (v instanceof File) fd.append(k, v);
+          else if (v !== null && v !== undefined) fd.append(k, String(v));
+        });
         const response = await fetch(`/api/applications/${applicationId}/background`, {
-          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedFormData),
+          method: 'PATCH',
+          body: fd, // no Content-Type header — browser sets multipart boundary automatically
         });
         if (!response.ok) { const r = await response.json(); throw new Error(r.error); }
         setLastSaved(new Date());
