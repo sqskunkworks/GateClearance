@@ -23,6 +23,13 @@ const convertToDBDate = (formDate: string): string | null => {
   return `${year}-${month}-${day}`;
 };
 
+// Derive escort_required from application_type.
+// short_gc and annual_gc: escort always required.
+// brown_card: no escort required — admin upgrades type after eligibility.
+const deriveEscortRequired = (applicationType: string): boolean => {
+  return applicationType !== 'brown_card';
+};
+
 export async function POST(req: Request) {
   try {
     const authSupabase = await createClient();
@@ -43,6 +50,9 @@ export async function POST(req: Request) {
 
     // Read application_type from DB — set at draft creation, never from client
     const applicationType = application.application_type || 'short_gc';
+
+    // Derive escort_required — never from user input
+    const escortRequired = deriveEscortRequired(applicationType);
 
     type FormValue = string | boolean | File;
     const formDataObj: Record<string, FormValue> = {};
@@ -68,7 +78,6 @@ export async function POST(req: Request) {
       else formDataObj[key] = booleanFields.includes(key) ? value === 'true' : value;
     }
 
-    // Include applicationType from DB in validation so server-side checks are type-aware
     const dataForValidation = { applicationId, applicationType, ...formDataObj };
     const validationResult = validateFullApplication(dataForValidation);
 
@@ -117,9 +126,10 @@ export async function POST(req: Request) {
       is_us_citizen: getString('isUsCitizen') === 'true',
       former_inmate: getString('formerInmate') === 'yes',
       on_probation_parole: getString('onParole') === 'yes',
-
-      // Additional comments
       additional_comments: getString('additionalComments') || null,
+
+      // ✅ GC/BC derived field — never from user input
+      escort_required: escortRequired,
 
       status: 'submitted',
       submitted_at: new Date().toISOString(),
