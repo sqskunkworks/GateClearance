@@ -8,14 +8,14 @@ interface SummaryData {
   otherNames?: string;
   dateOfBirth: string;
   gender: string;
-  
+
   // Contact
   email: string;
   phoneNumber: string;
   visitDate?: string;
   companyOrOrganization: string;
   purposeOfVisit: string;
-  
+
   // Experience
   engagedDirectly: string;
   perceptions: string;
@@ -24,7 +24,7 @@ interface SummaryData {
   interestsMost: string;
   reformFuture: string;
   additionalNotes?: string;
-  
+
   // Security
   governmentIdType: string;
   idState?: string;
@@ -36,7 +36,10 @@ interface SummaryData {
   onParole: string;
   passportScan?: File;
   wardenLetter?: File;
-  
+
+  // Additional comments
+  additionalComments?: string;
+
   // Meta
   applicationId: string;
   submittedAt: string;
@@ -73,8 +76,6 @@ function formatLabel(value: string): string {
   return LABELS[value] || value;
 }
 
-// Strip control characters that WinAnsi cannot encode
-// e.g. \r (0x0d) from Windows-style line endings in textarea inputs
 function sanitize(str: string): string {
   return str.replace(/[\r\x00-\x08\x0b\x0c\x0e-\x1f]/g, '');
 }
@@ -112,9 +113,7 @@ export async function generateSummaryPDF(data: SummaryData): Promise<Uint8Array>
     const currentSize = options.size || textSize;
     const maxWidth = options.maxWidth || width - 2 * margin;
 
-    // Sanitize: remove \r and other non-WinAnsi control chars, normalize \n to space for single-line rendering
     const cleanText = sanitize(text).replace(/\n/g, ' ');
-
     checkNewPage();
 
     const words = cleanText.split(' ');
@@ -214,6 +213,12 @@ export async function generateSummaryPDF(data: SummaryData): Promise<Uint8Array>
   addText('Confirmed Information Accuracy: Yes', margin);
   y -= lineHeight;
   addText('Consented to Data Use: Yes', margin);
+
+  // Additional comments section — only rendered if provided
+  if (data.additionalComments?.trim()) {
+    addSection('ADDITIONAL COMMENTS');
+    addField('Comments', data.additionalComments);
+  }
 
   // Footer
   checkNewPage();
