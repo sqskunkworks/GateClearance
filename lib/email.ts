@@ -103,7 +103,7 @@ export async function sendApplicationNotification(data: ApplicationNotificationD
 
   await transporter.sendMail({
     from: `"Gate Clearance System" <${process.env.GMAIL_USER}>`,
-    to: 'yasmine@sanquentinskunkworks.org',
+    to: 'clearance@sanquentinskunkworks.org',
    
     subject,
     html,
