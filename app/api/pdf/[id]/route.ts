@@ -83,8 +83,8 @@ export async function GET(
     };
 
     const pdf = await loadBlank2311();
-    await fill2311(pdf, record);
-    const bytes = await pdf.save();
+    const filledPdf = await fill2311(pdf, record);
+    const bytes = await filledPdf.save();
 
     const firstName = (data.first_name || '').replace(/[^a-zA-Z]/g, '');
     const lastName = (data.last_name || '').replace(/[^a-zA-Z]/g, '');
