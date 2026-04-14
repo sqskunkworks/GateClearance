@@ -54,7 +54,6 @@ export async function POST(req: Request) {
       return typeof v === 'string' ? v : '';
     };
 
-    // Coerce checkbox booleans
     const booleanFields = ['certificationAgreement', 'reasonableAccommodationAck', 'consentToDataUse'];
     for (const field of booleanFields) {
       if (formDataObj[field] === 'true') formDataObj[field] = true as unknown as string;
@@ -69,14 +68,10 @@ export async function POST(req: Request) {
     }
 
     // ── Warden letter check ──────────────────────────────────────
-    // File was uploaded eagerly at step 3 PATCH. On submit we check the
-    // documents table instead of requiring a live File object — this means
-    // resumed drafts work correctly without needing to re-upload.
     if (getString('q7Discharged') === 'yes') {
       const wardenLetterFile = formData.get('wardenLetter');
       const hasNewFile = wardenLetterFile instanceof File;
 
-      // Check if already uploaded in a previous session
       const { data: existingDoc } = await supabase
         .from('documents')
         .select('id')
@@ -91,7 +86,6 @@ export async function POST(req: Request) {
         );
       }
 
-      // If a new file was provided, upload it (replaces existing)
       if (hasNewFile && wardenLetterFile instanceof File) {
         try {
           const buffer = Buffer.from(await wardenLetterFile.arrayBuffer());
@@ -110,6 +104,12 @@ export async function POST(req: Request) {
           });
         } catch (e) {
           console.error('Warden letter upload failed at submit:', e);
+          // ✅ FIX: Block submission if re-upload fails so q7Discharged=yes
+          // applications are never marked submitted without a stored letter.
+          return NextResponse.json(
+            { error: 'Failed to upload warden letter — please try again' },
+            { status: 500 }
+          );
         }
       }
     }
