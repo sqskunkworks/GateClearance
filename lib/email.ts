@@ -31,6 +31,7 @@ interface ApplicationNotificationData {
   visitDate2?: string;
   visitDate3?: string;
   hasConfirmedDate?: string;
+  additionalComments?: string;
 }
 
 const formatDate = (dateStr?: string): string => {
@@ -58,6 +59,15 @@ const buildVisitDatesRow = (data: ApplicationNotificationData): string => {
     <tr style="background-color: #f9fafb;">
       <td style="padding: 10px 14px; font-weight: bold; color: #374151; width: 40%; border: 1px solid #e5e7eb;">Visit Date(s)</td>
       <td style="padding: 10px 14px; color: #111827; border: 1px solid #e5e7eb;">${dates}</td>
+    </tr>`;
+};
+
+const buildCommentsRow = (data: ApplicationNotificationData): string => {
+  if (!data.additionalComments?.trim()) return '';
+  return `
+    <tr>
+      <td style="padding: 10px 14px; font-weight: bold; color: #374151; border: 1px solid #e5e7eb;">Additional Comments</td>
+      <td style="padding: 10px 14px; color: #111827; border: 1px solid #e5e7eb; white-space: pre-wrap;">${data.additionalComments}</td>
     </tr>`;
 };
 
@@ -98,6 +108,7 @@ export async function sendApplicationNotification(data: ApplicationNotificationD
           <td style="padding: 10px 14px; color: #111827; border: 1px solid #e5e7eb;">${data.companyOrOrganization}</td>
         </tr>
         ${buildVisitDatesRow(data)}
+        ${buildCommentsRow(data)}
       </table>
       <p style="color: #6b7280; font-size: 13px; margin-top: 24px;">
         The completed CDCR 2311 form and additional information document have been uploaded to the shared Google Drive folder.
@@ -111,7 +122,7 @@ export async function sendApplicationNotification(data: ApplicationNotificationD
 
   await transporter.sendMail({
     from: `"Gate Clearance System" <${process.env.GMAIL_USER}>`,
-      to: 'yasmine@sanquentinskunkworks.org',
+    to: 'clearance@sanquentinskunkworks.org',
     subject,
     html,
   });

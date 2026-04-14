@@ -76,28 +76,53 @@ export default function AnnualGCStepPage() {
 
   useEffect(() => { loadFormData(); }, [loadFormData]);
 
-  const saveDraft = useCallback(async () => {
-    if (!applicationId || !formData) return;
-    try {
+ // ── REPLACE the saveDraft function in app/annual-gc/[step]/page.tsx ──
+// Find the existing saveDraft (lines ~79-100) and replace with this:
+
+const saveDraft = useCallback(async () => {
+  if (!applicationId || !formData) return;
+  try {
+    let response: Response;
+
+    if (currentStep === 3) {
+      // ✅ FIX: Step 3 background route expects FormData not JSON
+      const fd = new FormData();
+      Object.keys(formData).forEach((key) => {
+        const value = formData[key];
+        if (value instanceof File) fd.append(key, value);
+        else if (value !== null && value !== undefined) fd.append(key, String(value));
+      });
+      response = await fetch(`/api/applications/${applicationId}/background`, {
+        method: 'PATCH',
+        body: fd,
+      });
+    } else {
       const endpointMap: Record<number, string> = {
         1: 'cover',
         2: 'personal',
-        3: 'background',
         4: 'emergency',
       };
       const endpoint = endpointMap[currentStep];
       if (!endpoint) return; // step 5 is submit only
-
-      await fetch(`/api/applications/${applicationId}/${endpoint}`, {
+      response = await fetch(`/api/applications/${applicationId}/${endpoint}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
-      setLastSaved(new Date());
-    } catch (error) {
-      console.error('Failed to save draft:', error);
     }
-  }, [applicationId, currentStep, formData]);
+
+    // ✅ FIX: Check response.ok so silent failures don't show "last saved"
+    if (!response.ok) {
+      const result = await response.json();
+      console.error('Draft save failed:', result.error);
+      return;
+    }
+
+    setLastSaved(new Date());
+  } catch (error) {
+    console.error('Failed to save draft:', error);
+  }
+}, [applicationId, currentStep, formData]);
 
   const handleBack = async () => {
     await saveDraft();
@@ -166,9 +191,14 @@ if (currentStep === 2) {
 
       // ── Step 3: Background questions ─────────────────────────
       if (currentStep === 3) {
+        const fd = new FormData();
+        Object.entries(updatedFormData).forEach(([k, v]) => {
+          if (v instanceof File) fd.append(k, v);
+          else if (v !== null && v !== undefined) fd.append(k, String(v));
+        });
         const response = await fetch(`/api/applications/${applicationId}/background`, {
-          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedFormData),
+          method: 'PATCH',
+          body: fd, // no Content-Type header — browser sets multipart boundary automatically
         });
         if (!response.ok) { const r = await response.json(); throw new Error(r.error); }
         setLastSaved(new Date());

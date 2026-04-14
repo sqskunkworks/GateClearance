@@ -25,6 +25,13 @@ const convertToDBDate = (formDate: string): string => {
 const VALID_APPLICATION_TYPES = ['short_gc', 'annual_gc', 'brown_card'] as const;
 type ApplicationType = typeof VALID_APPLICATION_TYPES[number];
 
+// Derive escort_required from application_type.
+// GC and short_gc: escort always required.
+// BC (brown_card): no escort required.
+const deriveEscortRequired = (applicationType: string): boolean => {
+  return applicationType !== 'brown_card';
+};
+
 export async function POST(req: Request) {
   try {
     const authSupabase = await createClient();
@@ -46,18 +53,24 @@ export async function POST(req: Request) {
       );
     }
 
-    // ✅ Read application_type from body, validate it, fall back to short_gc
+    // Read application_type from body, validate against enum, fall back to short_gc
     const rawType = formData.applicationType ?? 'short_gc';
     const applicationType: ApplicationType = VALID_APPLICATION_TYPES.includes(rawType as ApplicationType)
       ? (rawType as ApplicationType)
       : 'short_gc';
 
+    // Derive escort_required at creation time — never from user input
+    const escortRequired = deriveEscortRequired(applicationType);
+
     const draftData = {
       id: applicationId,
       user_id: user.id,
 
-      // ✅ Set application_type from the URL/body — never hardcoded
+      // Set application_type from URL/body — never hardcoded
       application_type: applicationType,
+
+      // ✅ GC/BC derived field set at creation
+      escort_required: escortRequired,
 
       // Step 1: Personal info (real data)
       first_name: formData.firstName,
@@ -106,6 +119,7 @@ export async function POST(req: Request) {
       success: true,
       applicationId: data.id,
       applicationType,
+      escortRequired,
       message: 'Draft created successfully',
     });
 
