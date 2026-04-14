@@ -209,8 +209,8 @@ export async function POST(req: Request) {
 
     // ── 3. Upload passport scan if applicable ───────────────────
     const passportScanFile = formData.get('passportScan');
-    const isNonUsCitizen = application.is_us_citizen === false;
-    const isPassportId = governmentIdType === 'passport';
+    const isNonUsCitizen =getString('isUsCitizen') === 'false';
+    const isPassportId = getString('governmentIdType') === 'passport';
     if (isNonUsCitizen || isPassportId) {
       if (!passportScanFile || !(passportScanFile instanceof File)) {
         return NextResponse.json({ error: isNonUsCitizen ? 'Passport scan is required for non-US citizens' : 'Passport scan is required when using passport as ID' }, { status: 400 });
