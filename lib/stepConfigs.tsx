@@ -370,6 +370,14 @@ export const securityConfig: SectionConfig = {
       showIf: (values: Record<string, unknown>) => values.onParole === 'yes',
     },
     {
+      kind: 'textarea',
+      name: 'additionalComments',
+      label: 'Additional comments (optional)',
+      helpText: 'Anything else you would like the clearance coordinator to know.',
+      rows: 3,
+      span: 2,
+    },
+    {
       kind: 'checkbox',
       name: 'confirmAccuracy',
       label: 'I confirm the information is accurate and truthful.',

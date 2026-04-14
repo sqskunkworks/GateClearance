@@ -54,7 +54,7 @@ export const applications = pgTable("applications", {
 
   // Application Type
   applicationType: applicationTypeEnum("application_type").notNull().default("short_gc"),
-
+  additionalComments: text("additional_comments"),
   // Personal Information
   firstName: text("first_name").notNull(),
   middleName: text("middle_name"),
